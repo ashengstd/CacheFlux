@@ -4,10 +4,11 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from models import User_Req
 from rich.console import Console
 from rich.progress import Progress
 from scipy.io import savemat
+
+from models import UserReq
 from utils.constants import (
     DATA_PATH,
     INPUT_DATA_PATH,
@@ -33,10 +34,10 @@ def process_timepoint(args):
     time_connectivity_matrix = np.zeros((users, caches), dtype=bool)
     # 记录有效用户的索引
     vaild_users = []
-    user_reqs = np.zeros(users, dtype=int)
+    UserReqs = np.zeros(users, dtype=int)
 
     for i, row in enumerate(time_user_bandwidth.itertuples(index=False)):
-        req, connectivity = User_Req(
+        req, connectivity = UserReq(
             province=row.省份,
             operator=row.运营商,
             coverage_name=row.覆盖名,
@@ -54,10 +55,10 @@ def process_timepoint(args):
         if req == 0:
             continue
         time_connectivity_matrix[i, :] = connectivity
-        user_reqs[i] = req
+        UserReqs[i] = req
         vaild_users.append(i)
     time_connectivity_matrix = time_connectivity_matrix[vaild_users, :]
-    vaild_timepoint_user_bandwidth = user_reqs[vaild_users]
+    vaild_timepoint_user_bandwidth = UserReqs[vaild_users]
     return timepoint, time_connectivity_matrix, vaild_timepoint_user_bandwidth
 
 

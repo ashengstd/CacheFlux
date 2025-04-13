@@ -21,7 +21,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 ## 使用 uv sync 搭建环境
 
 ```shell
-uv sync --extra cu124/cpu # 根据显卡类型选择
+uv sync --extra cu126/cpu # 根据显卡类型选择
 ```
 
 # 运行
