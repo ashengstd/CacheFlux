@@ -1,9 +1,10 @@
 .venv
-uv.lock
 *.idea
 *__pycache__/
 data/pre_data/
 data/droo_mat/
 data/simplex/
 logs/
-models/
+ckpts/
+*.pyc
+*_cache

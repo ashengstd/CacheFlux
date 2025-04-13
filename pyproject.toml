@@ -52,10 +52,10 @@ torchvision = [
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
+url = "https://mirror.nju.edu.cn/pytorch/whl/cpu"
 explicit = true
 
 [[tool.uv.index]]
 name = "pytorch-cu126"
-url = "https://download.pytorch.org/whl/cu126"
+url = "https://mirror.nju.edu.cn/pytorch/whl/cu126/"
 explicit = true

@@ -1,0 +1,16 @@
+{
+    "network_architecture": [
+        116,
+        120,
+        80,
+        116
+    ],
+    "learning_rate": 0.01,
+    "training_interval": 10,
+    "batch_size": 100,
+    "memory_size": 1000,
+    "beta1": 0.09,
+    "beta2": 0.999,
+    "weight_decay": 0.0001,
+    "max_users": 2000
+}

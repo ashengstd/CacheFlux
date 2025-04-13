@@ -11,7 +11,8 @@ class ProgressController:
             self.progress.start()
 
     def add_task(self, description: str, total: float | None):
-        return self.progress.add_task(description=description, total=total)
+        if self.enable:
+            return self.progress.add_task(description=description, total=total)
 
     def update_task(self, task_id: int, advance: float = 1.0):
         if self.enable:
