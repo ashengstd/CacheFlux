@@ -1,3 +1,4 @@
+import argparse
 import random
 from pathlib import Path
 from typing import Any, List, Mapping
@@ -113,6 +114,12 @@ def train_droo_net_pulp_pipline(
 if __name__ == "__main__":
     # 初始化控制台
     console = Console()
+    parser = argparse.ArgumentParser(description="Train the DROO network")
+    parser.add_argument(
+        "--peek_period_enabled", action="store_true", help="Enable peek period"
+    )
+    args = parser.parse_args()
+
     PL_PARAMS = MemoryConfig(network_architecture=[116, 120, 80, 116])
     # 从字典中解包参数并创建模型
     MemoryDNN_Net = plMemoryDNN(PL_PARAMS)
@@ -157,9 +164,7 @@ if __name__ == "__main__":
                     header=0,
                 )
                 timepoints = user_bandwidth["时间点"].nunique()
-                timepoint_task = progress.add_task(
-                    "处理时间点", total=MAX_SAMPLES_PER_DAY
-                )
+                timepoint_task = progress.add_task("处理时间点", total=100)
                 best_solution_save_path = BEST_SOLUTION_PATH.joinpath(date)
                 best_solution_save_path.mkdir(parents=True, exist_ok=True)
 
@@ -168,17 +173,21 @@ if __name__ == "__main__":
                     list(INPUT_DATA_PATH.joinpath(month).joinpath(date).iterdir()),
                     key=lambda x: int(x.stem),
                 )
-                peek_period = [
-                    file
-                    for file in timepoint_files
-                    if PEEK_PERIOD[0] <= int(file.stem) <= PEEK_PERIOD[1]
-                ]
-                normal_period = [
-                    file for file in timepoint_files if file not in peek_period
-                ]
-                sampled_files = sample_files(
-                    peek_period, normal_period, MAX_SAMPLES_PER_DAY
-                )
+                if not args.peek_period_enabled:
+                    peek_period = [
+                        file
+                        for file in timepoint_files
+                        if PEEK_PERIOD[0] <= int(file.stem) <= PEEK_PERIOD[1]
+                    ]
+                    normal_period = [
+                        file for file in timepoint_files if file not in peek_period
+                    ]
+                    sampled_files = sample_files(
+                        peek_period, normal_period, MAX_SAMPLES_PER_DAY
+                    )
+                else:
+                    sampled_files = timepoint_files
+                progress.update(timepoint_task, total=len(sampled_files))
                 for timepoint_file in sampled_files:
                     epoch += 1
                     timepoint = int(timepoint_file.name.split(".")[0]) - 1
@@ -217,6 +226,7 @@ if __name__ == "__main__":
 
                     if epoch % 5 == 0:
                         MemoryDNN_Net.save_model(MODEL_SAVE_PATH.joinpath("latest.pth"))
+                    progress.advance(timepoint_task)
                 # 保存结果
                 progress.remove_task(timepoint_task)
                 progress.advance(daily_task)

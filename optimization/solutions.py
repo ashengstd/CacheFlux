@@ -2,8 +2,9 @@ from multiprocessing import Pool
 from typing import Tuple
 
 import numpy as np
-from optimization.optimization import solve_optimization
 from rich.progress import Progress
+
+from optimization.optimization_slack import solve_optimization
 
 
 def process_solution(

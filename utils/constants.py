@@ -2,8 +2,8 @@ import pathlib
 
 # 一些常量
 CACHES = 116  # 这个是缓存的数量，也是网络输入的维度
-N = 16  # 这个是网络输出的方案的数量
-PEEK_PERIOD = [0, 288]  # 这个是高峰期的时间段
+N = 32  # 这个是网络输出的方案的数量
+PEEK_PERIOD = [228, 288]  # 这个是高峰期的时间段
 MAX_SAMPLES_PER_DAY = 40  # 这个是每天的最大样本数量
 
 # 本地路径
@@ -30,7 +30,7 @@ MONTH_SUFFIX_CLEANED = "_csv_cleaned"
 PARAMS = {
     "network_architecture": [CACHES, 120, 80, CACHES],
     "learning_rate": 0.007,
-    "training_interval": 1,
+    "training_interval": 4,
     "batch_size": 128,
     "memory_size": 1024,
     "log_file": MEMORY_DNN_LOG_PATH,
