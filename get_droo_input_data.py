@@ -73,7 +73,7 @@ def preparing_for_droo(
     cache2id: dict,
 ) -> None:
     timepoints = user_bandwidth["时间点"].nunique()
-    logger.info(f"处理时间点: {timepoints}")
+    logger.info(f"总共要处理的时间点: {timepoints}")
 
     def update_timepoint(result):
         timepoint, time_connectivity_matrix, timepoint_user_bandwidth = result
