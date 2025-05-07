@@ -1,5 +1,7 @@
 import pandas as pd
-from constants import DATA_PATH, MONTH_SUFFIX_CLEANED, PRE_DATA_PATH
+from utils.config import DATA_PATH, MONTH_SUFFIX_CLEANED, PRE_DATA_PATH
+
+from utils import logger
 
 
 def clean_csv(input_file, output_file, encoding="UTF-8-SIG"):
@@ -29,7 +31,7 @@ def clean_csv(input_file, output_file, encoding="UTF-8-SIG"):
     df["时间点"] = df["时间点"] - df["时间点"].min().item()
     df.to_csv(output_file, index=False)
 
-    print(f"文件处理完成，已保存为 {output_file}")
+    logger.info(f"文件处理完成，已保存为 {output_file}")
 
 
 for month_dir in DATA_PATH.iterdir():

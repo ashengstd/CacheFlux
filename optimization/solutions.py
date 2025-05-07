@@ -2,9 +2,9 @@ from multiprocessing import Pool
 from typing import Tuple
 
 import numpy as np
-from rich.progress import Progress
 
 from optimization.optimization_slack import solve_optimization
+from utils.logger import logger
 
 
 def process_solution(
@@ -39,22 +39,18 @@ def compute_solutions(
     max_bandwidth: np.ndarray,
     mapping: np.ndarray,
     cost: np.ndarray,
-    progress: Progress | None,
 ) -> np.ndarray:
     """计算给定时间点的优化方案"""
     # 方案数量在变量shape中间，所以shape[1]是方案数量
     # 下面创建一个shape为 (方案数量, 用户数量, 缓存数量) 的数组
     nums = I_ij.shape[1]
     solutions = []
-    if progress:
-        task = progress.add_task("计算所有方案...", total=nums)
+    logger.info("计算所有方案...")
 
-    def update_progress(result):
+    def update_solutions(result):
         _, B, status = result
         if status == 1:
             solutions.append(B)
-        if progress is not None:
-            progress.update(task, advance=1)
 
     with Pool() as pool:
         args = [
@@ -62,12 +58,10 @@ def compute_solutions(
             for i in range(nums)
         ]
         for arg in args:
-            pool.apply_async(process_solution, args=(arg,), callback=update_progress)
+            pool.apply_async(process_solution, args=(arg,), callback=update_solutions)
         pool.close()
         pool.join()
 
-    if progress is not None:
-        progress.remove_task(task)
     return np.array(solutions)
 
 
@@ -75,8 +69,7 @@ def get_best_solution(
     solutions: np.ndarray,
     mappings: np.ndarray,
     cost: np.ndarray,
-    progress: Progress | None,
-) -> tuple[int, np.ndarray]:
+) -> tuple[int, float, np.ndarray]:
     """获取最优方案"""
     min_fitness = float("inf")
     # 方案数量在变量shape中间，所以shape[1]是方案数量
@@ -85,8 +78,7 @@ def get_best_solution(
     caches = solutions.shape[2]
     best_solution: np.ndarray = np.zeros((users, caches))
     best_index = 0
-    if progress is not None:
-        solution_task = progress.add_task("寻找最优方案...", total=solutions.shape[0])
+    logger.info("寻找最优方案...")
 
     for i in range(solutions.shape[0]):
         # 循环所有分配方案
@@ -111,8 +103,5 @@ def get_best_solution(
             min_fitness = fitness
             best_index = i
             best_solution = B  # 保存最优方案
-        if progress is not None:
-            progress.update(solution_task, advance=1)
-    if progress is not None:
-        progress.remove_task(solution_task)
-    return best_index, best_solution
+
+    return best_index, min_fitness, best_solution

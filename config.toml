@@ -1,0 +1,39 @@
+[constants]
+CACHES = 116
+N = 32
+PEEK_PERIOD = [228, 288]
+MAX_SAMPLES_PER_DAY = 40
+
+[paths]
+data_root = "data/质量约束下的成本调度数据v0.2版"
+pre_data = "data/pre_data"
+input_data = "data/droo_mat/droo_input_data"
+global = "data/simplex"
+best_solution = "data/simplex/best_solutions"
+test_solution = "data/simplex/test_solutions"
+model_ckpt = "ckpts"
+log_dir = "logs"
+lp_log = "logs/simplex.log"
+memory_dnn_log = "logs/memory_dnn.log"
+
+[logs]
+pulp_log_enable = false
+memory_dnn_log_enable = true
+
+[special]
+month_suffix_cleaned = "_csv_cleaned"
+
+[params]
+network_architecture = [116, 120, 80, 116]
+learning_rate = 0.007
+training_interval = 4
+batch_size = 128
+memory_size = 1024
+beta1 = 0.09
+beta2 = 0.999
+weight_decay = 0.0001
+max_users = 2000
+
+
+[general]
+threads = 2

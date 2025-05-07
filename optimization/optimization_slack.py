@@ -9,7 +9,7 @@ from pulp import (
     value,
 )
 
-from utils.constants import PULP_LOG_ENABLE, SIMPLEX_LOG_PATH, THREADS
+from utils.config import LP_LOG_PATH, PULP_LOG_ENABLE, THREADS
 
 PUNISHMENT = 1e3
 
@@ -155,7 +155,7 @@ def solve_optimization(
 
     # 记录求解状态
     if PULP_LOG_ENABLE:
-        with open(SIMPLEX_LOG_PATH, "a") as log_file:
+        with open(LP_LOG_PATH, "a") as log_file:
             status = "Optimal" if prob.status == 1 else "Infeasible"
             log_file.write(f"Status: {status}\n")
 

@@ -2,7 +2,9 @@ import json
 
 import numpy as np
 import pandas as pd
-from utils.constants import DATA_PATH, PRE_DATA_PATH
+
+from utils.config import DATA_PATH, PRE_DATA_PATH
+from utils.logger import logger
 
 # 创建预处理数据目录
 PRE_DATA_PATH.mkdir(parents=True, exist_ok=True)
@@ -35,7 +37,7 @@ with open(PRE_DATA_PATH.joinpath("pre_data.json"), "w") as f:
     json.dump(
         {"node2id": node2id, "cache2id": cache2id, "cache2node": cache_to_node_ids}, f
     )
-print("pre_data.json and node_cache_matrix.npy saved")
+logger.info("pre_data.json and node_cache_matrix.npy saved")
 
 # 构建并保存 B_jk_max 矩阵
 B_jk_max = (
@@ -45,7 +47,7 @@ B_jk_max = (
     .to_numpy()
 )
 np.save(PRE_DATA_PATH.joinpath("B_jk_max.npy"), B_jk_max)
-print("B_jk_max.npy saved")
+logger.info("B_jk_max.npy saved")
 
 # 填充 upper 和 lower 数组
 # 预处理节点信息一次，避免重复set_index操作
@@ -55,7 +57,7 @@ lower = node_info_indexed.reindex(list(node2id.keys()))["保底线"].to_numpy()
 
 np.save(PRE_DATA_PATH.joinpath("upper.npy"), upper)
 np.save(PRE_DATA_PATH.joinpath("lower.npy"), lower)
-print("upper.npy and lower.npy saved")
+logger.info("upper.npy and lower.npy saved")
 
 # 计算并保存每个 cache 组的成本
 costs = np.array(
@@ -65,7 +67,7 @@ costs = np.array(
     ]
 )
 np.save(PRE_DATA_PATH.joinpath("cost.npy"), costs)
-print("cost.npy saved")
+logger.info("cost.npy saved")
 
 # 计算并保存每个 node 的成本
 node_costs = node_info_indexed.reindex(list(node2id.keys()))["计费系数"].to_numpy()
@@ -79,4 +81,4 @@ max_bandwidths = (
     .to_numpy()
 )
 np.save(PRE_DATA_PATH.joinpath("max_bandwidths.npy"), max_bandwidths)
-print("max_bandwidths.npy saved")
+logger.info("max_bandwidths.npy saved")

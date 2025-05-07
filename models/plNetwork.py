@@ -11,6 +11,10 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 
+from utils.logger import RichLogger, logger
+
+torch.set_float32_matmul_precision("medium")
+
 
 @dataclass
 class MemoryConfig:
@@ -18,7 +22,7 @@ class MemoryConfig:
 
     network_architecture: List[int]
     learning_rate: float = 0.01
-    training_interval: int = 10
+    training_interval: int = 1
     batch_size: int = 100
     memory_size: int = 1000
     beta1: float = 0.09
@@ -50,6 +54,11 @@ class MemoryBuffer:
         """Sample a batch of state-action pairs"""
         return random.sample(self.buffer, min(batch_size, len(self.buffer)))
 
+    @property
+    def size(self) -> int:
+        """Get current size of memory"""
+        return len(self.buffer)
+
 
 class MemoryDataset(Dataset):
     """Dataset for memory samples using tensors"""
@@ -76,7 +85,6 @@ class plMemoryDNN(pl.LightningModule):
 
         # Initialize memory buffer
         self.register_buffer("memory_counter", torch.tensor(0))
-        self.memory_counter: torch.Tensor
         self.memory: MemoryBuffer = MemoryBuffer(
             max_size=self.config.memory_size,
         )
@@ -118,8 +126,20 @@ class plMemoryDNN(pl.LightningModule):
         state_vector = state_vector.to(self.device)
         action_vector = action_vector.to(self.device)
 
+        max_users = self.config.max_users  # e.g., 2000
+
+        if state_vector.shape[0] < max_users:
+            pad_rows = max_users - state_vector.shape[0]
+            state_vector = torch.nn.functional.pad(
+                state_vector, (0, 0, 0, pad_rows)
+            )  # pad rows
+            action_vector = torch.nn.functional.pad(action_vector, (0, 0, 0, pad_rows))
+        elif state_vector.shape[0] > max_users:
+            state_vector = state_vector[:max_users]
+            action_vector = action_vector[:max_users]
+
         self.memory.add(state_vector, action_vector)
-        self.memory_counter = self.memory_counter + torch.tensor(1, device=self.device)
+        self.memory_counter = self.memory_counter + 1
 
     def encode(
         self,
@@ -137,16 +157,23 @@ class plMemoryDNN(pl.LightningModule):
             return
 
         batch_size = min(self.config.batch_size, self.memory.size)
-        states, actions = self.memory.sample(batch_size)
+        samples = self.memory.sample(batch_size)
+
+        states = torch.stack([s for s, _ in samples])
+        actions = torch.stack([a for _, a in samples])
 
         dataset = MemoryDataset(states, actions)
-        dataloader = DataLoader(dataset, batch_size=len(dataset))
+        dataloader = DataLoader(
+            dataset, batch_size=self.config.batch_size, shuffle=True
+        )
 
         trainer = pl.Trainer(
             max_epochs=1,
             enable_checkpointing=False,
-            logger=False,
+            logger=RichLogger(logger),
             enable_progress_bar=False,
+            log_every_n_steps=1,
+            accelerator="gpu" if torch.cuda.is_available() else "cpu",
         )
         trainer.fit(self, dataloader)
 
@@ -213,7 +240,7 @@ class plMemoryDNN(pl.LightningModule):
     def plot_training_history(self):
         """Plot training loss history"""
         if not self.trainer.callback_metrics:
-            print("No training history available")
+            logger.error("No training history available")
             return
 
         losses = [x["train_loss"].item() for x in self.trainer.callback_metrics]
@@ -244,7 +271,7 @@ class plMemoryDNN(pl.LightningModule):
         config_path = save_path / "config.json"
         config_path.write_text(json.dumps(asdict(self.config), indent=4))
 
-        print(f"Model saved to {save_path}")
+        logger.info(f"Model saved to {save_path}")
 
     @staticmethod
     def load_model(load_path: Path, device: torch.device = torch.device("cuda")):
@@ -263,5 +290,5 @@ class plMemoryDNN(pl.LightningModule):
         model_path = load_path / "model.pth"
         model.load_state_dict(torch.load(model_path, map_location=device))
 
-        print(f"Model loaded from {load_path}")
+        logger.info(f"Model loaded from {load_path}")
         return model

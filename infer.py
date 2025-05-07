@@ -1,26 +1,27 @@
 import json
 import math
 import random
+import time
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from rich.console import Console
-from rich.progress import Progress
 
 from models import UserReq
 from models.plNetwork import MemoryConfig, plMemoryDNN
 from optimization.solutions import compute_solutions, get_best_solution
-from utils.constants import (
+from utils.config import (
     CACHES,
     DATA_PATH,
     LOG_PATH,
+    LP_LOG_PATH,
     MEMORY_DNN_LOG_PATH,
     MODEL_SAVE_PATH,
+    PL_PARAMS,
     PRE_DATA_PATH,
-    SIMPLEX_LOG_PATH,
     TEST_SOLUTION_PATH,
 )
+from utils.logger import logger
 
 
 def prepareDirectories():
@@ -28,7 +29,7 @@ def prepareDirectories():
     for path in [LOG_PATH, TEST_SOLUTION_PATH]:
         Path(path).mkdir(parents=True, exist_ok=True)
 
-    for log_path in [MEMORY_DNN_LOG_PATH, SIMPLEX_LOG_PATH]:
+    for log_path in [MEMORY_DNN_LOG_PATH, LP_LOG_PATH]:
         log_file = Path(log_path)
         if log_file.exists():
             log_file.unlink()
@@ -90,9 +91,8 @@ def drooPulpPipeline(
     mappings,
     cost,
     node_cost,
-    progress,
 ):
-    droo_output = np.array(model.decode(droo_input, N, "OP"))
+    droo_output = np.array(model.decode(droo_input, N))
     droo_connect = droo_output - droo_input[:, np.newaxis, :] + 1
     solutions = compute_solutions(
         R,
@@ -102,22 +102,47 @@ def drooPulpPipeline(
         max_bandwidth,
         mappings,
         cost,
-        progress,
     )
 
     if solutions.shape[0] == 0:
-        return 0, None
+        return 0, None, float("inf")
 
-    _, best_solution = get_best_solution(solutions, mappings, node_cost, progress)
-    return solutions.shape[0], best_solution
+    _, min_cost, best_solution = get_best_solution(solutions, mappings, node_cost)
+    return solutions.shape[0], best_solution, min_cost
 
 
-def getRequestsAndConnectivity(user_list, cache2id, dataframes, progress):
+def lp_pipeline(
+    R,
+    droo_input,
+    max_values,
+    max_bandwidth,
+    mappings,
+    cost,
+    node_cost,
+):
+    solutions = compute_solutions(
+        R,
+        droo_input,
+        droo_input,
+        max_values,
+        max_bandwidth,
+        mappings,
+        cost,
+    )
+
+    if solutions.shape[0] == 0:
+        return 0, None, float("inf")
+
+    _, min_cost, best_solution = get_best_solution(solutions, mappings, node_cost)
+    return solutions.shape[0], best_solution, min_cost
+
+
+def getRequestsAndConnectivity(user_list, cache2id, dataframes):
     users = len(user_list)
     connectivity_matrix = np.zeros((users, CACHES), dtype=bool)
     valid_users = []
     UserReqs = np.zeros(users, dtype=int)
-    UserReq_progress = progress.add_task("处理用户需求", total=users)
+    logger.info("开始处理用户需求")
 
     # 使用多进程处理用户连通性
     def collect_result(result):
@@ -125,7 +150,6 @@ def getRequestsAndConnectivity(user_list, cache2id, dataframes, progress):
         UserReqs[i] = req
         connectivity_matrix[i, :] = connectivity
         valid_users.append(i)
-        progress.update(UserReq_progress, advance=1)
 
     for i, user in enumerate(user_list):
         args = (i, user, dataframes, cache2id, CACHES)
@@ -144,7 +168,6 @@ def inferWithRetry(
     mappings,
     cost,
     node_cost,
-    progress,
 ):
     # 神经网络解码和方案计算
     solution_nums = 0
@@ -153,8 +176,8 @@ def inferWithRetry(
     current = 0
     while current <= retry:
         current += 1
-        progress.console.print(f"尝试第{current}次", style="bold yellow")
-        solution_nums, best_solution = drooPulpPipeline(
+        logger.info(f"尝试第{current}次")
+        solution_nums, best_solution, min_cost = drooPulpPipeline(
             R,
             connectivity_matrix,
             2 ** (current - 1) * N if 2 ** (current - 1) * N < CACHES else CACHES,
@@ -164,27 +187,99 @@ def inferWithRetry(
             mappings,
             cost,
             node_cost,
-            progress,
         )
         if solution_nums > 4:
             break
-        progress.console.print("本轮未找到足够方案", style="bold yellow")
+        logger.debug(
+            f"未找到方案，尝试第{current}次，方案数量：{solution_nums}，当前方案数量：{2 ** (current - 1) * N}"
+        )
     else:
         if solution_nums == 0:
-            progress.console.print("未找到任何方案", style="bold red")
+            logger.error("未找到方案")
         return
-    progress.console.print(
-        f"找到{solution_nums}个方案，得到最优解，已保存", style="bold green"
+    logger.info(
+        f"找到{solution_nums}个方案，得到最优解，已保存，最小成本：{min_cost:.2f}，方案数量：{solution_nums}"
     )
-    return best_solution
+    return best_solution, min_cost
 
 
-def infer_csv_pipeline(test_csv: Path, timepoint: int = 167, N=16):
-    # 初始化控制台和模型
-    console = Console()
-    PL_PARAMS = MemoryConfig(network_architecture=[116, 120, 80, 116])
-    # 从字典中解包参数并创建模型
-    MemoryDNN_Net = plMemoryDNN(PL_PARAMS)
+def infer_csv_pipeline(
+    model,
+    test_csv: Path,
+    timepoint: int = 167,
+    N=16,
+    max_values=None,
+    max_bandwidth=None,
+    mappings=None,
+    cost=None,
+    node_cost=None,
+    cache2id=None,
+    dataframes=None,
+):
+    # 加载用户需求
+    df = pd.read_csv(test_csv)
+    df.rename(columns={"6月用户带宽数据": "带宽数据"}, inplace=True)
+    df = df[df["时间点"] == timepoint]
+    # 初始化进度条和连接矩阵
+    user_list = []
+    for row in df.itertuples(index=False):
+        user_list.append(
+            UserReq(
+                province=str(row.省份),
+                operator=str(row.运营商),
+                coverage_name=str(row.覆盖名),
+                ip_type=int(row.IP类型),
+                reqs=int(row.带宽数据),
+            )
+        )
+    UserReqs, connectivity_matrix = getRequestsAndConnectivity(
+        user_list, cache2id, dataframes
+    )
+    if UserReqs.shape[0] == 0:
+        logger.error("无有效用户需求")
+        return
+    begin = time.time()
+    best_solution: np.ndarray | None
+    min_cost: float
+    best_solution, min_cost = inferWithRetry(
+        R=UserReqs,
+        connectivity_matrix=connectivity_matrix,
+        N=N,
+        model=model,
+        max_values=max_values,
+        max_bandwidth=max_bandwidth,
+        mappings=mappings,
+        cost=cost,
+        node_cost=node_cost,
+    )
+    if best_solution is None:
+        logger.error("未找到方案")
+    else:
+        logger.info(
+            f"DRLOP花费时间：{time.time() - begin:.2f}秒, 最小成本：{min_cost:.2f}"
+        )
+    begin = time.time()
+    _, best_solution, min_cost = lp_pipeline(
+        R=UserReqs,
+        droo_input=connectivity_matrix,
+        max_values=max_values,
+        max_bandwidth=max_bandwidth,
+        mappings=mappings,
+        cost=cost,
+        node_cost=node_cost,
+    )
+    if best_solution is None:
+        logger.error("未找到方案")
+    else:
+        logger.info(
+            f"LP花费时间：{time.time() - begin:.2f}秒, 最小成本：{min_cost:.2f}"
+        )
+
+
+def random_test():
+    # 初始化模型参数
+    memory_config = MemoryConfig(**PL_PARAMS)
+    MemoryDNN_Net = plMemoryDNN(memory_config)
     MemoryDNN_Net.load_model(MODEL_SAVE_PATH.joinpath("best"))
 
     # 文件夹准备和数据加载
@@ -194,49 +289,6 @@ def infer_csv_pipeline(test_csv: Path, timepoint: int = 167, N=16):
     )
     dataframes = loadDataframeFiles()
 
-    # 加载用户需求
-    df = pd.read_csv(test_csv)
-    df.rename(columns={"6月用户带宽数据": "带宽数据"}, inplace=True)
-    df = df[df["时间点"] == timepoint]
-    # 初始化进度条和连接矩阵
-    with Progress(console=console) as progress:
-        user_list = []
-        for row in df.itertuples(index=False):
-            user_list.append(
-                UserReq(
-                    province=str(row.省份),
-                    operator=str(row.运营商),
-                    coverage_name=str(row.覆盖名),
-                    ip_type=int(row.IP类型),
-                    reqs=int(row.带宽数据),
-                )
-            )
-        UserReqs, connectivity_matrix = getRequestsAndConnectivity(
-            user_list, cache2id, dataframes, progress
-        )
-        if UserReqs.shape[0] == 0:
-            progress.console.print("无有效用户需求", style="bold red")
-            return
-        best_solution: np.ndarray | None = inferWithRetry(
-            R=UserReqs,
-            connectivity_matrix=connectivity_matrix,
-            N=N,
-            model=MemoryDNN_Net,
-            max_values=max_values,
-            max_bandwidth=max_bandwidth,
-            mappings=mappings,
-            cost=cost,
-            node_cost=node_cost,
-            progress=progress,
-        )
-        if best_solution is not None:
-            np.save(
-                TEST_SOLUTION_PATH.joinpath(f"{test_csv.stem}_{timepoint}.npy"),
-                best_solution,
-            )
-
-
-def random_test():
     # 获取所有可用文件
     all_files_5 = list(PRE_DATA_PATH.joinpath("5_csv_cleaned").iterdir())
     all_files_6 = list(PRE_DATA_PATH.joinpath("6_csv_cleaned").iterdir())
@@ -259,7 +311,19 @@ def random_test():
 
     for random_date_csv, timepoints in file_timepoints:
         for timepoint in list(timepoints):
-            infer_csv_pipeline(random_date_csv, timepoint, N=16)
+            infer_csv_pipeline(
+                random_date_csv,
+                timepoint,
+                N=16,
+                model=MemoryDNN_Net,
+                max_values=max_values,
+                max_bandwidth=max_bandwidth,
+                mappings=mappings,
+                cost=cost,
+                node_cost=node_cost,
+                cache2id=cache2id,
+                dataframes=dataframes,
+            )
 
 
 if __name__ == "__main__":

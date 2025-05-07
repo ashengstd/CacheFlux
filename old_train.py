@@ -9,10 +9,11 @@ from rich.progress import Progress
 
 from models import MemoryDNN
 from optimization.solutions import compute_solutions, get_best_solution
-from utils.constants import (
+from utils.config import (
     BEST_SOLUTION_PATH,
     INPUT_DATA_PATH,
     LOG_PATH,
+    LP_LOG_PATH,
     MAX_SAMPLES_PER_DAY,
     MEMORY_DNN_LOG_PATH,
     MODEL_SAVE_PATH,
@@ -21,7 +22,6 @@ from utils.constants import (
     PEEK_PERIOD,
     PRE_DATA_PATH,
     PULP_LOG_ENABLE,
-    SIMPLEX_LOG_PATH,
     N,
 )
 
@@ -31,8 +31,8 @@ def setup_directories():
     Path(LOG_PATH).mkdir(parents=True, exist_ok=True)
     if Path(MEMORY_DNN_LOG_PATH).exists():
         Path(MEMORY_DNN_LOG_PATH).unlink()
-    if Path(SIMPLEX_LOG_PATH).exists():
-        Path(SIMPLEX_LOG_PATH).unlink()
+    if Path(LP_LOG_PATH).exists():
+        Path(LP_LOG_PATH).unlink()
     Path(BEST_SOLUTION_PATH).mkdir(parents=True, exist_ok=True)
     Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
 
@@ -104,7 +104,7 @@ def train_droo_net_pulp_pipline(
     # 获得最优方案
     best_index: int
     best_solution: np.ndarray
-    best_index, best_solution = get_best_solution(
+    best_index, min_cost, best_solution = get_best_solution(
         solutions, mappings, node_costs, progress
     )
     # 每5个时间点训练一次神经网络
@@ -149,7 +149,7 @@ if __name__ == "__main__":
             for daily_dir in INPUT_DATA_PATH.joinpath(month).iterdir():
                 date: str = daily_dir.name.split(".")[0]
                 if PULP_LOG_ENABLE:
-                    with open(SIMPLEX_LOG_PATH, "a") as log_file:
+                    with open(LP_LOG_PATH, "a") as log_file:
                         log_file.write(f"Date: {date}:\n")
                 progress.update(daily_task, description=f"处理日期：{date}")
                 droo_input_path: Path = INPUT_DATA_PATH.joinpath(month).joinpath(date)
@@ -186,7 +186,7 @@ if __name__ == "__main__":
                     epoch += 1
                     timepoint = int(timepoint_file.name.split(".")[0]) - 1
                     if PULP_LOG_ENABLE:
-                        with open(SIMPLEX_LOG_PATH, "a") as log_file:
+                        with open(LP_LOG_PATH, "a") as log_file:
                             log_file.write(f"Timepoint {timepoint + 1}:\n")
                     progress.update(
                         timepoint_task, description=f"处理时间点：{timepoint + 1}"
