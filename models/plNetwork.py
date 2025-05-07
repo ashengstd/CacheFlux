@@ -154,7 +154,9 @@ class plMemoryDNN(pl.LightningModule):
         """Lightning training step"""
         predictions = self(batch["input"])
         loss = nn.BCELoss()(predictions, batch["target"])
-        self.log("train_loss", loss)
+        self.log(
+            "train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
         return loss
 
     def configure_optimizers(self):
