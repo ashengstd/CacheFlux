@@ -45,7 +45,7 @@ def compute_solutions(
     # 下面创建一个shape为 (方案数量, 用户数量, 缓存数量) 的数组
     nums = I_ij.shape[1]
     solutions = []
-    logger.info("计算所有方案...")
+    logger.info(f"Calculating all solutions... Number of solutions: {nums}")
 
     def update_solutions(result):
         _, B, status = result
@@ -78,7 +78,9 @@ def get_best_solution(
     caches = solutions.shape[2]
     best_solution: np.ndarray = np.zeros((users, caches))
     best_index = 0
-    logger.info("寻找最优方案...")
+    logger.info(
+        f"Search for the best solution... Number of solutions: {solutions.shape[0]}"
+    )
 
     for i in range(solutions.shape[0]):
         # 循环所有分配方案

@@ -1,10 +1,11 @@
 .venv
 *.idea
 *__pycache__/
-data/pre_data/
-data/droo_mat/
-data/simplex/
+data/
 logs/
 ckpts/
 *.pyc
 *_cache
+# pixi environments
+.pixi
+*.egg-info

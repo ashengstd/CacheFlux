@@ -12,13 +12,13 @@ from models import MemoryConfig, plMemoryDNN
 from optimization.solutions import compute_solutions, get_best_solution
 from utils.config import (
     BEST_SOLUTION_PATH,
+    CSV_PATH,
     INPUT_DATA_PATH,
     LOG_PATH,
     LP_LOG_PATH,
     MAX_SAMPLES_PER_DAY,
     MEMORY_DNN_LOG_PATH,
     MODEL_SAVE_PATH,
-    MONTH_SUFFIX_CLEANED,
     PEEK_PERIOD,
     PL_PARAMS,
     PRE_DATA_PATH,
@@ -41,11 +41,12 @@ def setup_directories():
 
 def load_preprocessed_data():
     """Load preprocessed data from specified paths."""
-    max_values = np.load(PRE_DATA_PATH.joinpath("upper.npy"))
-    max_bandwidth = np.load(PRE_DATA_PATH.joinpath("max_bandwidths.npy"))
-    mapping = np.load(PRE_DATA_PATH.joinpath("node_cache_matrix.npy"))
-    cost = np.load(PRE_DATA_PATH.joinpath("cost.npy"))
-    node_costs = np.load(PRE_DATA_PATH.joinpath("node_costs.npy"))
+    info_dif = PRE_DATA_PATH.joinpath("info")
+    max_values = np.load(info_dif.joinpath("upper.npy"))
+    max_bandwidth = np.load(info_dif.joinpath("max_bandwidths.npy"))
+    mapping = np.load(info_dif.joinpath("node_cache_matrix.npy"))
+    cost = np.load(info_dif.joinpath("cost.npy"))
+    node_costs = np.load(info_dif.joinpath("node_costs.npy"))
     return max_values, max_bandwidth, mapping, cost, node_costs
 
 
@@ -134,23 +135,21 @@ if __name__ == "__main__":
     max_values, max_bandwidth, mappings, cost, node_costs = load_preprocessed_data()
 
     # 训练 DROO 网络
-    logger.info("开始训练 DRLOP 网络")
+    logger.info("Start training DRLOP network...")
 
     epoch = 0
     for monthly_dir in INPUT_DATA_PATH.iterdir():
         month = monthly_dir.name
-        logger.info(f"处理月份：{month}")
+        logger.info(f"Processing Month：{month}")
         daily_dirs = list(monthly_dir.iterdir())
 
         for daily_dir in daily_dirs:
             date = daily_dir.name.split(".")[0]
             droo_input_path = monthly_dir / date
-            logger.info(f"处理日期：{date}")
+            logger.info(f"Processing Date：{date}")
             # 加载 CSV
             user_bandwidth = pd.read_csv(
-                PRE_DATA_PATH.joinpath(f"{month}{MONTH_SUFFIX_CLEANED}").joinpath(
-                    f"{date}.csv"
-                ),
+                CSV_PATH.joinpath(f"{month}").joinpath(f"{date}.csv"),
                 header=0,
             )
 
@@ -191,7 +190,7 @@ if __name__ == "__main__":
                     with open(LP_LOG_PATH, "a") as log_file:
                         log_file.write(f"Timepoint {timepoint + 1}:\n")
 
-                logger.info(f"处理时间点：{timepoint + 1}")
+                logger.info(f"Processing Timepoint：{timepoint + 1}")
 
                 solutions_nums, best_solution = train_droo_net_pulp_pipline(
                     timepoint=timepoint,
@@ -224,4 +223,4 @@ if __name__ == "__main__":
 
     # 最终保存
     MemoryDNN_Net.save_model(MODEL_SAVE_PATH / "best")
-    logger.info("训练完成!")
+    logger.info("Training Done!")

@@ -1,7 +1,7 @@
 import pandas as pd
-from utils.config import DATA_PATH, MONTH_SUFFIX_CLEANED, PRE_DATA_PATH
 
-from utils import logger
+from utils.config import CSV_DATA_PATH, PRE_DATA_PATH
+from utils.logger import logger
 
 
 def clean_csv(input_file, output_file, encoding="UTF-8-SIG"):
@@ -31,17 +31,17 @@ def clean_csv(input_file, output_file, encoding="UTF-8-SIG"):
     df["时间点"] = df["时间点"] - df["时间点"].min().item()
     df.to_csv(output_file, index=False)
 
-    logger.info(f"文件处理完成，已保存为 {output_file}")
+    logger.info(f"File cleaned and saved as {output_file}")
 
 
-for month_dir in DATA_PATH.iterdir():
-    if month_dir.name.endswith("月用户带宽数据"):
-        month = month_dir.name.split("月")[0]
-        month_cleaned_path = PRE_DATA_PATH.joinpath(f"{month}{MONTH_SUFFIX_CLEANED}")
-        month_cleaned_path.mkdir(parents=True, exist_ok=True)
+for month_dir in CSV_DATA_PATH.iterdir():
+    month = month_dir.name
+    logger.info(f"Processing Month：{month}")
+    month_cleaned_path = PRE_DATA_PATH.joinpath("csv").joinpath(f"{month}")
+    month_cleaned_path.mkdir(parents=True, exist_ok=True)
 
-        for daily_file in month_dir.iterdir():
-            date = daily_file.name[5:15]
-            input_file = daily_file
-            output_file = month_cleaned_path.joinpath(f"{date}.csv")
-            clean_csv(input_file, output_file)
+    for daily_file in month_dir.iterdir():
+        date = daily_file.name.split(".")[0]
+        input_file = daily_file
+        output_file = month_cleaned_path.joinpath(f"{date}.csv")
+        clean_csv(input_file, output_file)

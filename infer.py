@@ -12,13 +12,14 @@ from models.plNetwork import MemoryConfig, plMemoryDNN
 from optimization.solutions import compute_solutions, get_best_solution
 from utils.config import (
     CACHES,
-    DATA_PATH,
+    CSV_PATH,
+    INFO_DATA_PATH,
+    INFO_PATH,
     LOG_PATH,
     LP_LOG_PATH,
     MEMORY_DNN_LOG_PATH,
     MODEL_SAVE_PATH,
     PL_PARAMS,
-    PRE_DATA_PATH,
     TEST_SOLUTION_PATH,
 )
 from utils.logger import logger
@@ -37,13 +38,13 @@ def prepareDirectories():
 
 def loadPreprocessedData():
     """Load preprocessed data from specified paths."""
-    max_values = np.load(PRE_DATA_PATH.joinpath("upper.npy"))
-    max_bandwidth = np.load(PRE_DATA_PATH.joinpath("max_bandwidths.npy"))
-    mapping = np.load(PRE_DATA_PATH.joinpath("node_cache_matrix.npy"))
-    cost = np.load(PRE_DATA_PATH.joinpath("cost.npy"))
-    node_costs = np.load(PRE_DATA_PATH.joinpath("node_costs.npy"))
+    max_values = np.load(INFO_PATH.joinpath("upper.npy"))
+    max_bandwidth = np.load(INFO_PATH.joinpath("max_bandwidths.npy"))
+    mapping = np.load(INFO_PATH.joinpath("node_cache_matrix.npy"))
+    cost = np.load(INFO_PATH.joinpath("cost.npy"))
+    node_costs = np.load(INFO_PATH.joinpath("node_costs.npy"))
 
-    with open(PRE_DATA_PATH.joinpath("pre_data.json"), encoding="UTF-8") as f:
+    with open(INFO_PATH.joinpath("pre_data.json"), encoding="UTF-8") as f:
         cache2id = json.load(f)["cache2id"]
 
     return max_values, max_bandwidth, mapping, cost, node_costs, cache2id
@@ -52,18 +53,20 @@ def loadPreprocessedData():
 def loadDataframeFiles():
     """加载数据文件."""
     file_names = [
-        "覆盖可用cache组_v0.2.csv",
-        "cache组信息_v0.2.csv",
-        "节点信息_v0.2.csv",
-        "覆盖信息_v0.2.csv",
-        "质量等级信息_v0.2.csv",
+        "coverage_cache_group_info.csv",
+        "cache_group_info.csv",
+        "node_info.csv",
+        "coverage_info.csv",
+        "quality_level_info.csv",
     ]
     return {
-        "coverage_cache_group_info": pd.read_csv(DATA_PATH.joinpath(file_names[0])),
-        "cache_group_info": pd.read_csv(DATA_PATH.joinpath(file_names[1])),
-        "node_info": pd.read_csv(DATA_PATH.joinpath(file_names[2])),
-        "coverage_info": pd.read_csv(DATA_PATH.joinpath(file_names[3])),
-        "quality_level_info": pd.read_csv(DATA_PATH.joinpath(file_names[4])),
+        "coverage_cache_group_info": pd.read_csv(
+            INFO_DATA_PATH.joinpath(file_names[0])
+        ),
+        "cache_group_info": pd.read_csv(INFO_DATA_PATH.joinpath(file_names[1])),
+        "node_info": pd.read_csv(INFO_DATA_PATH.joinpath(file_names[2])),
+        "coverage_info": pd.read_csv(INFO_DATA_PATH.joinpath(file_names[3])),
+        "quality_level_info": pd.read_csv(INFO_DATA_PATH.joinpath(file_names[4])),
     }
 
 
@@ -142,7 +145,7 @@ def getRequestsAndConnectivity(user_list, cache2id, dataframes):
     connectivity_matrix = np.zeros((users, CACHES), dtype=bool)
     valid_users = []
     UserReqs = np.zeros(users, dtype=int)
-    logger.info("开始处理用户需求")
+    logger.info("Start processing user requests and connectivity matrix...")
 
     # 使用多进程处理用户连通性
     def collect_result(result):
@@ -176,7 +179,7 @@ def inferWithRetry(
     current = 0
     while current <= retry:
         current += 1
-        logger.info(f"尝试第{current}次")
+        logger.info(f"retry for the {current}th time")
         solution_nums, best_solution, min_cost = drooPulpPipeline(
             R,
             connectivity_matrix,
@@ -191,14 +194,14 @@ def inferWithRetry(
         if solution_nums > 4:
             break
         logger.debug(
-            f"未找到方案，尝试第{current}次，方案数量：{solution_nums}，当前方案数量：{2 ** (current - 1) * N}"
+            f"Retrying for the {current}th time, solution numbers: {solution_nums}, current solution numbers: {2 ** (current - 1) * N}"
         )
     else:
         if solution_nums == 0:
-            logger.error("未找到方案")
+            logger.error("No solution found after retrying")
         return
     logger.info(
-        f"找到{solution_nums}个方案，得到最优解，已保存，最小成本：{min_cost:.2f}，方案数量：{solution_nums}"
+        f"Found {solution_nums} solutions, best solution found, saved, min cost: {min_cost:.2f}, solution numbers: {solution_nums}"
     )
     return best_solution, min_cost
 
@@ -236,7 +239,7 @@ def infer_csv_pipeline(
         user_list, cache2id, dataframes
     )
     if UserReqs.shape[0] == 0:
-        logger.error("无有效用户需求")
+        logger.error("No valid user request found")
         return
     begin = time.time()
     best_solution: np.ndarray | None
@@ -253,10 +256,10 @@ def infer_csv_pipeline(
         node_cost=node_cost,
     )
     if best_solution is None:
-        logger.error("未找到方案")
+        logger.error("No solution found")
     else:
         logger.info(
-            f"DRLOP花费时间：{time.time() - begin:.2f}秒, 最小成本：{min_cost:.2f}"
+            f"DRLOP time cost：{time.time() - begin:.2f}second(s), Minimal Cost：{min_cost:.2f}"
         )
     begin = time.time()
     _, best_solution, min_cost = lp_pipeline(
@@ -269,10 +272,10 @@ def infer_csv_pipeline(
         node_cost=node_cost,
     )
     if best_solution is None:
-        logger.error("未找到方案")
+        logger.error("No solution found")
     else:
         logger.info(
-            f"LP花费时间：{time.time() - begin:.2f}秒, 最小成本：{min_cost:.2f}"
+            f"LP time cost：{time.time() - begin:.2f}second(s), Minimal Cost：{min_cost:.2f}"
         )
 
 
@@ -290,8 +293,8 @@ def random_test():
     dataframes = loadDataframeFiles()
 
     # 获取所有可用文件
-    all_files_5 = list(PRE_DATA_PATH.joinpath("5_csv_cleaned").iterdir())
-    all_files_6 = list(PRE_DATA_PATH.joinpath("6_csv_cleaned").iterdir())
+    all_files_5 = list(CSV_PATH.joinpath("5").iterdir())
+    all_files_6 = list(CSV_PATH.joinpath("6").iterdir())
     all_files = all_files_5 + all_files_6
 
     # 生成与每个文件对应的时间点
@@ -312,10 +315,10 @@ def random_test():
     for random_date_csv, timepoints in file_timepoints:
         for timepoint in list(timepoints):
             infer_csv_pipeline(
-                random_date_csv,
-                timepoint,
-                N=16,
                 model=MemoryDNN_Net,
+                test_csv=random_date_csv,
+                timepoint=timepoint,
+                N=16,
                 max_values=max_values,
                 max_bandwidth=max_bandwidth,
                 mappings=mappings,

@@ -5,12 +5,18 @@ PEEK_PERIOD = [228, 288]
 MAX_SAMPLES_PER_DAY = 40
 
 [paths]
-data_root = "data/质量约束下的成本调度数据v0.2版"
-pre_data = "data/pre_data"
-input_data = "data/droo_mat/droo_input_data"
-global = "data/simplex"
-best_solution = "data/simplex/best_solutions"
-test_solution = "data/simplex/test_solutions"
+# Paths to the data files and directories
+csv_data = "data/csv/requests"
+info_data = "data/csv/info"
+# Paths to the preprocessed data and directories
+preprocessed_data = "data/preprocessed"
+input_data = "data/droo_mat/"
+
+# Paths to the training and testing data
+best_solution = "data/best_solutions"
+test_solution = "data/test_solutions"
+
+# Paths to the model checkpoints and logs
 model_ckpt = "ckpts"
 log_dir = "logs"
 lp_log = "logs/simplex.log"
