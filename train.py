@@ -83,7 +83,9 @@ def train_droo_net_pulp_pipline(
     # 提取第 i 个时间点的 users*caches 矩阵
     timepoint_data: np.ndarray = droo_data["connectivity"]
     # 调用 mem.decode() 得到 droo_output，返回神经网络的输出
-    droo_output: np.ndarray = np.array(MemoryDNN_Net.decode(timepoint_data, N))
+    droo_output: np.ndarray = np.array(
+        MemoryDNN_Net.decode(timepoint_data, N), dtype=np.bool_
+    )
     # 计算需求矩阵
     R: np.ndarray = droo_data["requests"].squeeze()
     # droo_connect用于保存奖励函数的差值
@@ -225,17 +227,13 @@ if __name__ == "__main__":
                             )
 
                     if epoch % 5 == 0:
-                        MemoryDNN_Net.save_model(MODEL_SAVE_PATH.joinpath("latest.pth"))
+                        MemoryDNN_Net.save_model(MODEL_SAVE_PATH.joinpath("latest"))
                     progress.advance(timepoint_task)
                 # 保存结果
                 progress.remove_task(timepoint_task)
                 progress.advance(daily_task)
-                MODEL_SAVE_PATH.joinpath(month).mkdir(parents=True, exist_ok=True)
-                MemoryDNN_Net.save_model(
-                    MODEL_SAVE_PATH.joinpath(month).joinpath(f"{date}.pth")
-                )
-            progress.remove_task(daily_task)
+                MemoryDNN_Net.save_model(MODEL_SAVE_PATH.joinpath(month))
             progress.advance(months_task)
         progress.remove_task(months_task)
-        MemoryDNN_Net.save_model(MODEL_SAVE_PATH.joinpath("final.pth"))
+        MemoryDNN_Net.save_model(MODEL_SAVE_PATH.joinpath("best"))
         console.print("训练完成!")

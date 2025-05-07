@@ -5,23 +5,22 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from optimization.solutions import compute_solutions, get_best_solution
 from rich.console import Console
 from rich.progress import Progress
+
+from models import UserReq
+from models.plNetwork import MemoryConfig, plMemoryDNN
+from optimization.solutions import compute_solutions, get_best_solution
 from utils.constants import (
     CACHES,
     DATA_PATH,
     LOG_PATH,
     MEMORY_DNN_LOG_PATH,
     MODEL_SAVE_PATH,
-    PARAMS,
     PRE_DATA_PATH,
     SIMPLEX_LOG_PATH,
     TEST_SOLUTION_PATH,
 )
-
-from models import User_Req
-from models.Network import MemoryDNN
 
 
 def prepareDirectories():
@@ -117,22 +116,22 @@ def getRequestsAndConnectivity(user_list, cache2id, dataframes, progress):
     users = len(user_list)
     connectivity_matrix = np.zeros((users, CACHES), dtype=bool)
     valid_users = []
-    user_reqs = np.zeros(users, dtype=int)
-    user_req_progress = progress.add_task("处理用户需求", total=users)
+    UserReqs = np.zeros(users, dtype=int)
+    UserReq_progress = progress.add_task("处理用户需求", total=users)
 
     # 使用多进程处理用户连通性
     def collect_result(result):
         i, req, connectivity = result
-        user_reqs[i] = req
+        UserReqs[i] = req
         connectivity_matrix[i, :] = connectivity
         valid_users.append(i)
-        progress.update(user_req_progress, advance=1)
+        progress.update(UserReq_progress, advance=1)
 
     for i, user in enumerate(user_list):
         args = (i, user, dataframes, cache2id, CACHES)
         result = processUser(args)
         collect_result(result)
-    return user_reqs[valid_users], connectivity_matrix[valid_users, :]
+    return UserReqs[valid_users], connectivity_matrix[valid_users, :]
 
 
 def inferWithRetry(
@@ -183,8 +182,10 @@ def inferWithRetry(
 def infer_csv_pipeline(test_csv: Path, timepoint: int = 167, N=16):
     # 初始化控制台和模型
     console = Console()
-    MemoryDNN_Net = MemoryDNN(**PARAMS)
-    MemoryDNN_Net.load_state_dict(MODEL_SAVE_PATH.joinpath("latest.pth"))
+    PL_PARAMS = MemoryConfig(network_architecture=[116, 120, 80, 116])
+    # 从字典中解包参数并创建模型
+    MemoryDNN_Net = plMemoryDNN(PL_PARAMS)
+    MemoryDNN_Net.load_model(MODEL_SAVE_PATH.joinpath("best"))
 
     # 文件夹准备和数据加载
     prepareDirectories()
@@ -202,22 +203,22 @@ def infer_csv_pipeline(test_csv: Path, timepoint: int = 167, N=16):
         user_list = []
         for row in df.itertuples(index=False):
             user_list.append(
-                User_Req(
-                    province=row.省份,
-                    operator=row.运营商,
-                    coverage_name=row.覆盖名,
-                    ip_type=row.IP类型,
-                    reqs=row.带宽数据,
+                UserReq(
+                    province=str(row.省份),
+                    operator=str(row.运营商),
+                    coverage_name=str(row.覆盖名),
+                    ip_type=int(row.IP类型),
+                    reqs=int(row.带宽数据),
                 )
             )
-        user_reqs, connectivity_matrix = getRequestsAndConnectivity(
+        UserReqs, connectivity_matrix = getRequestsAndConnectivity(
             user_list, cache2id, dataframes, progress
         )
-        if user_reqs.shape[0] == 0:
+        if UserReqs.shape[0] == 0:
             progress.console.print("无有效用户需求", style="bold red")
             return
         best_solution: np.ndarray | None = inferWithRetry(
-            R=user_reqs,
+            R=UserReqs,
             connectivity_matrix=connectivity_matrix,
             N=N,
             model=MemoryDNN_Net,
@@ -262,5 +263,4 @@ def random_test():
 
 
 if __name__ == "__main__":
-    # infer_csv_pipeline(test_csv=Path("data/pre_data/5_csv_cleaned/2023-05-01.csv"), timepoint=3, N=16)
     random_test()
