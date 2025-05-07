@@ -8,10 +8,10 @@ from scipy.io import savemat
 
 from models import UserReq
 from utils.config import (
-    CSV_PATH,
-    INFO_DATA_PATH,
+    INFO_CSV_PATH,
+    INFO_NPY_PATH,
     INPUT_DATA_PATH,
-    PRE_DATA_PATH,
+    REQ_CSV_CSV_PATH,
 )
 from utils.logger import logger
 
@@ -110,24 +110,24 @@ def preparing_for_droo(
 
 if __name__ == "__main__":
     # 加载必要的 JSON 和 CSV 数据
-    with open(f"{PRE_DATA_PATH}/info/pre_data.json", encoding="UTF-8") as f:
+    with open(INFO_NPY_PATH.joinpath("pre_data.json"), encoding="UTF-8") as f:
         cache2id = json.load(f)["cache2id"]
     caches = len(cache2id)  # 计算 cache 组数量
 
     # 加载 CSV 数据表格
     coverage_cache_group_info = pd.read_csv(
-        f"{INFO_DATA_PATH}/coverage_cache_group_info.csv"
+        f"{INFO_CSV_PATH}/coverage_cache_group_info.csv"
     )
-    cache_group_info = pd.read_csv(f"{INFO_DATA_PATH}/cache_group_info.csv")
-    node_info = pd.read_csv(f"{INFO_DATA_PATH}/node_info.csv")
-    coverage_info = pd.read_csv(f"{INFO_DATA_PATH}/coverage_info.csv")
-    quality_level_info = pd.read_csv(f"{INFO_DATA_PATH}/quality_level_info.csv")
+    cache_group_info = pd.read_csv(f"{INFO_CSV_PATH}/cache_group_info.csv")
+    node_info = pd.read_csv(f"{INFO_CSV_PATH}/node_info.csv")
+    coverage_info = pd.read_csv(f"{INFO_CSV_PATH}/coverage_info.csv")
+    quality_level_info = pd.read_csv(f"{INFO_CSV_PATH}/quality_level_info.csv")
 
     # 获取月份文件数量（预处理数据文件夹中的文件数量）
-    months = sum(1 for file in Path(CSV_PATH).iterdir())
+    months = sum(1 for file in Path(REQ_CSV_CSV_PATH).iterdir())
 
     # 处理每个月的文件夹
-    for month_dir in sorted(list(CSV_PATH.iterdir())):
+    for month_dir in sorted(list(REQ_CSV_CSV_PATH.iterdir())):
         # 获取月份名称，例如"2024_06"格式
         month: str = month_dir.name
         logger.info(f"Processing Month: {month}")
@@ -136,7 +136,7 @@ if __name__ == "__main__":
         month_dir.mkdir(parents=True, exist_ok=True)
 
         # 处理每个日期的文件
-        for daily_file in sorted(list(CSV_PATH.joinpath(month).iterdir())):
+        for daily_file in sorted(list(REQ_CSV_CSV_PATH.joinpath(month).iterdir())):
             # 获取日期名称，例如"2024_06_01"格式
             date: str = daily_file.name.split(".")[0]
             logger.info(f"Processing Date: {date}")
@@ -146,7 +146,9 @@ if __name__ == "__main__":
             daily_dir.mkdir(parents=True, exist_ok=True)
 
             # 读取用户带宽数据 CSV 文件
-            user_bandwidth_path = Path(CSV_PATH).joinpath(month).joinpath(f"{date}.csv")
+            user_bandwidth_path = (
+                Path(REQ_CSV_CSV_PATH).joinpath(month).joinpath(f"{date}.csv")
+            )
             user_bandwidth = pd.read_csv(user_bandwidth_path, header=0)
             user_bandwidth.rename(columns={"6月用户带宽数据": "带宽数据"}, inplace=True)
 

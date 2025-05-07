@@ -1,6 +1,6 @@
 import pandas as pd
 
-from utils.config import CSV_DATA_PATH, PRE_DATA_PATH
+from utils.config import PRE_DATA_PATH, REQ_CSV_CSV_PATH
 from utils.logger import logger
 
 
@@ -34,7 +34,7 @@ def clean_csv(input_file, output_file, encoding="UTF-8-SIG"):
     logger.info(f"File cleaned and saved as {output_file}")
 
 
-for month_dir in CSV_DATA_PATH.iterdir():
+for month_dir in REQ_CSV_CSV_PATH.iterdir():
     month = month_dir.name
     logger.info(f"Processing Month：{month}")
     month_cleaned_path = PRE_DATA_PATH.joinpath("csv").joinpath(f"{month}")

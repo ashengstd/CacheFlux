@@ -11,18 +11,16 @@ from rich.console import Console
 from models import MemoryConfig, plMemoryDNN
 from optimization.solutions import compute_solutions, get_best_solution
 from utils.config import (
-    BEST_SOLUTION_PATH,
-    CSV_PATH,
+    INFO_NPY_PATH,
     INPUT_DATA_PATH,
     LOG_PATH,
     LP_LOG_PATH,
     MAX_SAMPLES_PER_DAY,
-    MEMORY_DNN_LOG_PATH,
     MODEL_SAVE_PATH,
     PEEK_PERIOD,
     PL_PARAMS,
-    PRE_DATA_PATH,
     PULP_LOG_ENABLE,
+    REQ_CSV_CSV_PATH,
     N,
 )
 from utils.logger import logger
@@ -31,22 +29,18 @@ from utils.logger import logger
 def setup_directories():
     """Create necessary directories and clean up log files."""
     Path(LOG_PATH).mkdir(parents=True, exist_ok=True)
-    if Path(MEMORY_DNN_LOG_PATH).exists():
-        Path(MEMORY_DNN_LOG_PATH).unlink()
     if Path(LP_LOG_PATH).exists():
         Path(LP_LOG_PATH).unlink()
-    Path(BEST_SOLUTION_PATH).mkdir(parents=True, exist_ok=True)
     Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
 
 
 def load_preprocessed_data():
     """Load preprocessed data from specified paths."""
-    info_dif = PRE_DATA_PATH.joinpath("info")
-    max_values = np.load(info_dif.joinpath("upper.npy"))
-    max_bandwidth = np.load(info_dif.joinpath("max_bandwidths.npy"))
-    mapping = np.load(info_dif.joinpath("node_cache_matrix.npy"))
-    cost = np.load(info_dif.joinpath("cost.npy"))
-    node_costs = np.load(info_dif.joinpath("node_costs.npy"))
+    max_values = np.load(INFO_NPY_PATH.joinpath("upper.npy"))
+    max_bandwidth = np.load(INFO_NPY_PATH.joinpath("max_bandwidths.npy"))
+    mapping = np.load(INFO_NPY_PATH.joinpath("node_cache_matrix.npy"))
+    cost = np.load(INFO_NPY_PATH.joinpath("cost.npy"))
+    node_costs = np.load(INFO_NPY_PATH.joinpath("node_costs.npy"))
     return max_values, max_bandwidth, mapping, cost, node_costs
 
 
@@ -149,14 +143,12 @@ if __name__ == "__main__":
             logger.info(f"Processing Date：{date}")
             # 加载 CSV
             user_bandwidth = pd.read_csv(
-                CSV_PATH.joinpath(f"{month}").joinpath(f"{date}.csv"),
+                REQ_CSV_CSV_PATH.joinpath(f"{month}").joinpath(f"{date}.csv"),
                 header=0,
             )
 
             # 时间点数量
             timepoints = user_bandwidth["时间点"].nunique()
-            best_solution_save_path = BEST_SOLUTION_PATH / date
-            best_solution_save_path.mkdir(parents=True, exist_ok=True)
 
             # 抽样时间点文件
             timepoint_files = sorted(
@@ -207,12 +199,6 @@ if __name__ == "__main__":
                     logger.error("No solutions found!")
                 else:
                     logger.info(f"find {solutions_nums} solutions")
-                    if best_solution is not None:
-                        pass
-                        np.save(
-                            best_solution_save_path / f"{timepoint + 1}.npy",
-                            best_solution,
-                        )
 
                 # 每5次保存一次模型
                 if epoch % 5 == 0:

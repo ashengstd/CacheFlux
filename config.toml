@@ -6,21 +6,15 @@ MAX_SAMPLES_PER_DAY = 40
 
 [paths]
 # Paths to the data files and directories
-csv_data = "data/csv/requests"
-info_data = "data/csv/info"
+csv_data = "data/csv/"
 # Paths to the preprocessed data and directories
 preprocessed_data = "data/preprocessed"
-input_data = "data/droo_mat/"
 
-# Paths to the training and testing data
-best_solution = "data/best_solutions"
-test_solution = "data/test_solutions"
-
-# Paths to the model checkpoints and logs
+# Paths to the model checkpoints
 model_ckpt = "ckpts"
+
+# Paths to the logs
 log_dir = "logs"
-lp_log = "logs/simplex.log"
-memory_dnn_log = "logs/memory_dnn.log"
 
 [logs]
 pulp_log_enable = false

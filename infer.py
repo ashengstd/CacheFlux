@@ -12,46 +12,43 @@ from models.plNetwork import MemoryConfig, plMemoryDNN
 from optimization.solutions import compute_solutions, get_best_solution
 from utils.config import (
     CACHES,
-    CSV_PATH,
-    INFO_DATA_PATH,
-    INFO_PATH,
+    INFO_CSV_PATH,
+    INFO_NPY_PATH,
     LOG_PATH,
     LP_LOG_PATH,
-    MEMORY_DNN_LOG_PATH,
     MODEL_SAVE_PATH,
     PL_PARAMS,
+    REQ_CSV_CSV_PATH,
     TEST_SOLUTION_PATH,
 )
 from utils.logger import logger
 
 
 def prepareDirectories():
-    """准备所需文件夹并清理日志路径."""
+    """Create necessary directories and clean up log files."""
     for path in [LOG_PATH, TEST_SOLUTION_PATH]:
         Path(path).mkdir(parents=True, exist_ok=True)
 
-    for log_path in [MEMORY_DNN_LOG_PATH, LP_LOG_PATH]:
-        log_file = Path(log_path)
-        if log_file.exists():
-            log_file.unlink()
+    if LP_LOG_PATH.exists():
+        LP_LOG_PATH.unlink()
 
 
 def loadPreprocessedData():
     """Load preprocessed data from specified paths."""
-    max_values = np.load(INFO_PATH.joinpath("upper.npy"))
-    max_bandwidth = np.load(INFO_PATH.joinpath("max_bandwidths.npy"))
-    mapping = np.load(INFO_PATH.joinpath("node_cache_matrix.npy"))
-    cost = np.load(INFO_PATH.joinpath("cost.npy"))
-    node_costs = np.load(INFO_PATH.joinpath("node_costs.npy"))
+    max_values = np.load(INFO_NPY_PATH.joinpath("upper.npy"))
+    max_bandwidth = np.load(INFO_NPY_PATH.joinpath("max_bandwidths.npy"))
+    mapping = np.load(INFO_NPY_PATH.joinpath("node_cache_matrix.npy"))
+    cost = np.load(INFO_NPY_PATH.joinpath("cost.npy"))
+    node_costs = np.load(INFO_NPY_PATH.joinpath("node_costs.npy"))
 
-    with open(INFO_PATH.joinpath("pre_data.json"), encoding="UTF-8") as f:
+    with open(INFO_NPY_PATH.joinpath("pre_data.json"), encoding="UTF-8") as f:
         cache2id = json.load(f)["cache2id"]
 
     return max_values, max_bandwidth, mapping, cost, node_costs, cache2id
 
 
 def loadDataframeFiles():
-    """加载数据文件."""
+    """Load CSV files into pandas DataFrames."""
     file_names = [
         "coverage_cache_group_info.csv",
         "cache_group_info.csv",
@@ -60,13 +57,11 @@ def loadDataframeFiles():
         "quality_level_info.csv",
     ]
     return {
-        "coverage_cache_group_info": pd.read_csv(
-            INFO_DATA_PATH.joinpath(file_names[0])
-        ),
-        "cache_group_info": pd.read_csv(INFO_DATA_PATH.joinpath(file_names[1])),
-        "node_info": pd.read_csv(INFO_DATA_PATH.joinpath(file_names[2])),
-        "coverage_info": pd.read_csv(INFO_DATA_PATH.joinpath(file_names[3])),
-        "quality_level_info": pd.read_csv(INFO_DATA_PATH.joinpath(file_names[4])),
+        "coverage_cache_group_info": pd.read_csv(INFO_CSV_PATH.joinpath(file_names[0])),
+        "cache_group_info": pd.read_csv(INFO_CSV_PATH.joinpath(file_names[1])),
+        "node_info": pd.read_csv(INFO_CSV_PATH.joinpath(file_names[2])),
+        "coverage_info": pd.read_csv(INFO_CSV_PATH.joinpath(file_names[3])),
+        "quality_level_info": pd.read_csv(INFO_CSV_PATH.joinpath(file_names[4])),
     }
 
 
@@ -172,7 +167,6 @@ def inferWithRetry(
     cost,
     node_cost,
 ):
-    # 神经网络解码和方案计算
     solution_nums = 0
     best_solution = None
     retry = math.floor(math.log2(CACHES / N)) + 1
@@ -293,8 +287,8 @@ def random_test():
     dataframes = loadDataframeFiles()
 
     # 获取所有可用文件
-    all_files_5 = list(CSV_PATH.joinpath("5").iterdir())
-    all_files_6 = list(CSV_PATH.joinpath("6").iterdir())
+    all_files_5 = list(REQ_CSV_CSV_PATH.joinpath("5").iterdir())
+    all_files_6 = list(REQ_CSV_CSV_PATH.joinpath("6").iterdir())
     all_files = all_files_5 + all_files_6
 
     # 生成与每个文件对应的时间点

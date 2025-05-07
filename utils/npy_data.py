@@ -3,16 +3,12 @@ import json
 import numpy as np
 import pandas as pd
 
-from utils.config import INFO_DATA_PATH, PRE_DATA_PATH
+from utils.config import INFO_CSV_PATH, INFO_NPY_PATH
 from utils.logger import logger
 
-# 创建预处理数据目录
-INFO_SAVE_PATH = PRE_DATA_PATH.joinpath("info")
-INFO_SAVE_PATH.mkdir(parents=True, exist_ok=True)
-
 # 读取数据
-df_cache_info = pd.read_csv(INFO_DATA_PATH.joinpath("cache_group_info.csv"))
-df_node_info = pd.read_csv(INFO_DATA_PATH.joinpath("node_info.csv"))
+df_cache_info = pd.read_csv(INFO_CSV_PATH.joinpath("cache_group_info.csv"))
+df_node_info = pd.read_csv(INFO_CSV_PATH.joinpath("node_info.csv"))
 
 # 获取唯一的 cache 组和节点名，并创建 ID 映射
 cache2id = {cache: i for i, cache in enumerate(df_cache_info["cache组"].unique())}
@@ -33,8 +29,8 @@ for _, row in df_cache_info.iterrows():
     node_cache_matrix[nodeid, cacheid] = 1
 
 # 保存 node_cache_matrix 和映射关系
-np.save(INFO_SAVE_PATH.joinpath("node_cache_matrix.npy"), node_cache_matrix)
-with open(INFO_SAVE_PATH.joinpath("pre_data.json"), "w") as f:
+np.save(INFO_NPY_PATH.joinpath("node_cache_matrix.npy"), node_cache_matrix)
+with open(INFO_NPY_PATH.joinpath("pre_data.json"), "w") as f:
     json.dump(
         {"node2id": node2id, "cache2id": cache2id, "cache2node": cache_to_node_ids}, f
     )
@@ -47,7 +43,7 @@ B_jk_max = (
     .reindex(list(cache2id.keys()))
     .to_numpy()
 )
-np.save(INFO_SAVE_PATH.joinpath("B_jk_max.npy"), B_jk_max)
+np.save(INFO_NPY_PATH.joinpath("B_jk_max.npy"), B_jk_max)
 logger.info("B_jk_max.npy saved")
 
 # 填充 upper 和 lower 数组
@@ -56,8 +52,8 @@ node_info_indexed = df_node_info.set_index("节点名")
 upper = node_info_indexed.reindex(list(node2id.keys()))["跑高线"].to_numpy()
 lower = node_info_indexed.reindex(list(node2id.keys()))["保底线"].to_numpy()
 
-np.save(INFO_SAVE_PATH.joinpath("upper.npy"), upper)
-np.save(INFO_SAVE_PATH.joinpath("lower.npy"), lower)
+np.save(INFO_NPY_PATH.joinpath("upper.npy"), upper)
+np.save(INFO_NPY_PATH.joinpath("lower.npy"), lower)
 logger.info("upper.npy and lower.npy saved")
 
 # 计算并保存每个 cache 组的成本
@@ -67,12 +63,12 @@ costs = np.array(
         for first_node_id in [cache_to_node_ids[cache][0] for cache in cache2id.keys()]
     ]
 )
-np.save(INFO_SAVE_PATH.joinpath("cost.npy"), costs)
+np.save(INFO_NPY_PATH.joinpath("cost.npy"), costs)
 logger.info("cost.npy saved")
 
 # 计算并保存每个 node 的成本
 node_costs = node_info_indexed.reindex(list(node2id.keys()))["计费系数"].to_numpy()
-np.save(INFO_SAVE_PATH.joinpath("node_costs.npy"), node_costs)
+np.save(INFO_NPY_PATH.joinpath("node_costs.npy"), node_costs)
 
 # 计算并保存每个 cache 组的最大带宽
 max_bandwidths = (
@@ -81,5 +77,5 @@ max_bandwidths = (
     .reindex(list(cache2id.keys()))
     .to_numpy()
 )
-np.save(INFO_SAVE_PATH.joinpath("max_bandwidths.npy"), max_bandwidths)
+np.save(INFO_NPY_PATH.joinpath("max_bandwidths.npy"), max_bandwidths)
 logger.info("max_bandwidths.npy saved")
