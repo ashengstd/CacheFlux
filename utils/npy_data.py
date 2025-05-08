@@ -23,7 +23,7 @@ cache_to_node_ids = {
 }
 
 # 创建节点与 cache 组的映射矩阵
-node_cache_matrix = np.zeros((len(node2id), len(cache2id)), dtype=int)
+node_cache_matrix = np.zeros((len(node2id), len(cache2id)), dtype=np.bool_)
 for _, row in df_cache_info.iterrows():
     nodeid, cacheid = node2id[row["节点名"]], cache2id[row["cache组"]]
     node_cache_matrix[nodeid, cacheid] = 1
@@ -43,8 +43,8 @@ B_jk_max = (
     .reindex(list(cache2id.keys()))
     .to_numpy()
 )
-np.save(INFO_NPY_PATH.joinpath("B_jk_max.npy"), B_jk_max)
-logger.info("B_jk_max.npy saved")
+np.save(INFO_NPY_PATH.joinpath("B_jk_maxs.npy"), B_jk_max)
+logger.info("B_jk_maxs.npy saved")
 
 # 填充 upper 和 lower 数组
 # 预处理节点信息一次，避免重复set_index操作
@@ -52,9 +52,9 @@ node_info_indexed = df_node_info.set_index("节点名")
 upper = node_info_indexed.reindex(list(node2id.keys()))["跑高线"].to_numpy()
 lower = node_info_indexed.reindex(list(node2id.keys()))["保底线"].to_numpy()
 
-np.save(INFO_NPY_PATH.joinpath("upper.npy"), upper)
-np.save(INFO_NPY_PATH.joinpath("lower.npy"), lower)
-logger.info("upper.npy and lower.npy saved")
+np.save(INFO_NPY_PATH.joinpath("uppers.npy"), upper)
+np.save(INFO_NPY_PATH.joinpath("lowers.npy"), lower)
+logger.info("uppers.npy and lowers.npy saved")
 
 # 计算并保存每个 cache 组的成本
 costs = np.array(
@@ -63,8 +63,8 @@ costs = np.array(
         for first_node_id in [cache_to_node_ids[cache][0] for cache in cache2id.keys()]
     ]
 )
-np.save(INFO_NPY_PATH.joinpath("cost.npy"), costs)
-logger.info("cost.npy saved")
+np.save(INFO_NPY_PATH.joinpath("costs.npy"), costs)
+logger.info("costs.npy saved")
 
 # 计算并保存每个 node 的成本
 node_costs = node_info_indexed.reindex(list(node2id.keys()))["计费系数"].to_numpy()

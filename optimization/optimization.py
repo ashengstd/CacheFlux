@@ -9,7 +9,9 @@ from pulp import (
     value,
 )
 
+from optimization.SharedMemory import SharedMemManager
 from utils.config import LP_LOG_PATH, PULP_LOG_ENABLE, THREADS
+from utils.logger import logger
 
 
 def objective_function(
@@ -79,31 +81,37 @@ def max_constraint(
     return constraints
 
 
-def solve_optimization(
-    I_ij: np.ndarray,
-    R_i: np.ndarray,
-    A_ij: np.ndarray,
-    max_values: np.ndarray,
-    max_bandwidth: np.ndarray,
-    mapping: np.ndarray,
-    cost: np.ndarray,
-) -> tuple[np.ndarray, int]:
+def solve_optimization(idx) -> tuple[np.ndarray, int]:
     """
     求解优化问题并返回结果, Shape为 USERS*CACHES
     """
+
+    logger.debug(f"Processing solution for index {idx}")
+
+    I_ij, _ = SharedMemManager.get("I_ij")
+    A_ij, _ = SharedMemManager.get("A_ij")
+    R_i, _ = SharedMemManager.get("R")
+    max_values, _ = SharedMemManager.get("max_values")
+    max_bandwidths, _ = SharedMemManager.get("max_bandwidths")
+    mappings, _ = SharedMemManager.get("mappings")
+    costs, _ = SharedMemManager.get("costs")
+
+    I_ij = I_ij[:, idx, :]
+    A_ij = A_ij[:, idx, :]
+
     prob = LpProblem("Minimize_B", LpMinimize)
     users, caches = I_ij.shape[0], I_ij.shape[1]
     B = LpVariable.matrix("B", (range(users), range(caches)), lowBound=0)
 
     # 设置目标函数
-    prob += objective_function_new(B, A_ij, cost, users, caches, mapping)
+    prob += objective_function_new(B, A_ij, costs, users, caches, mappings)
 
     # 添加约束条件
     for constraint in constraint1(B, I_ij, R_i, users, caches):
         prob += constraint
-    for constraint in constraint2(B, I_ij, max_bandwidth, users, caches):
+    for constraint in constraint2(B, I_ij, max_bandwidths, users, caches):
         prob += constraint
-    for constraint in max_constraint(B, I_ij, max_values, mapping, users, caches):
+    for constraint in max_constraint(B, I_ij, max_values, mappings, users, caches):
         prob += constraint
 
     # 求解

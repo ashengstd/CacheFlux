@@ -9,7 +9,9 @@ from pulp import (
     value,
 )
 
+from optimization.SharedMemory import SharedMemManager
 from utils.config import LP_LOG_PATH, PULP_LOG_ENABLE, THREADS
+from utils.logger import logger
 
 PUNISHMENT = 1e3
 
@@ -116,18 +118,24 @@ def max_constraint_with_slack(
     return constraints, slack_vars
 
 
-def solve_optimization(
-    I_ij: np.ndarray,
-    R_i: np.ndarray,
-    A_ij: np.ndarray,
-    max_values: np.ndarray,
-    max_bandwidth: np.ndarray,
-    mapping: np.ndarray,
-    cost: np.ndarray,
-) -> tuple[np.ndarray, int]:
+def solve_optimization(idx) -> tuple[np.ndarray, int]:
     """
     求解优化问题并返回结果, Shape为 USERS*CACHES
     """
+
+    logger.debug(f"Processing solution for index {idx}")
+
+    I_ij, _ = SharedMemManager.get("I_ij")
+    A_ij, _ = SharedMemManager.get("A_ij")
+    R_i, _ = SharedMemManager.get("R")
+    max_values, _ = SharedMemManager.get("max_values")
+    max_bandwidths, _ = SharedMemManager.get("max_bandwidths")
+    mappings, _ = SharedMemManager.get("mappings")
+    costs, _ = SharedMemManager.get("costs")
+
+    I_ij = I_ij[:, idx, :]
+    A_ij = A_ij[:, idx, :]
+
     prob = LpProblem("Minimize_B", LpMinimize)
     users, caches = I_ij.shape[0], I_ij.shape[1]
     B = LpVariable.matrix("B", (range(users), range(caches)), lowBound=0)
@@ -135,20 +143,20 @@ def solve_optimization(
     # 添加约束条件
     for constraint in constraint1(B, I_ij, R_i, users, caches):
         prob += constraint
-    for constraint in constraint2(B, I_ij, max_bandwidth, users, caches):
+    for constraint in constraint2(B, I_ij, max_bandwidths, users, caches):
         prob += constraint
     # constraints_min, slack_vars_min = min_constraint_with_slack(B, I_ij, min_values, mapping, users, caches)
     # for constraint in constraints_min:
     #     prob += constraint
     constraints_max, slack_vars_max = max_constraint_with_slack(
-        B, I_ij, max_values, mapping, users, caches
+        B, I_ij, max_values, mappings, users, caches
     )
     for constraint in constraints_max:
         prob += constraint
     # slack_vars = [slack_vars_min, slack_vars_max]
     slack_vars = slack_vars_max
     # 设置目标函数
-    prob += objective_function(B, A_ij, cost, users, caches, slack_vars)
+    prob += objective_function(B, A_ij, costs, users, caches, slack_vars)
 
     # 求解
     prob.solve(PULP_CBC_CMD(msg=0, threads=THREADS))

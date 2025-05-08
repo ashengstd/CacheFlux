@@ -9,7 +9,11 @@ import scipy.io as sio
 from rich.console import Console
 
 from models import MemoryConfig, plMemoryDNN
-from optimization.solutions import compute_solutions, get_best_solution
+from optimization.SharedMemory import SharedMemManager
+from optimization.solutions import (
+    compute_solutions_shm as compute_solutions,
+)
+from optimization.solutions import get_best_solution
 from utils.config import (
     INFO_NPY_PATH,
     INPUT_DATA_PATH,
@@ -36,12 +40,12 @@ def setup_directories():
 
 def load_preprocessed_data():
     """Load preprocessed data from specified paths."""
-    max_values = np.load(INFO_NPY_PATH.joinpath("upper.npy"))
-    max_bandwidth = np.load(INFO_NPY_PATH.joinpath("max_bandwidths.npy"))
-    mapping = np.load(INFO_NPY_PATH.joinpath("node_cache_matrix.npy"))
-    cost = np.load(INFO_NPY_PATH.joinpath("cost.npy"))
+    max_values = np.load(INFO_NPY_PATH.joinpath("uppers.npy"))
+    max_bandwidths = np.load(INFO_NPY_PATH.joinpath("max_bandwidths.npy"))
+    mappings = np.load(INFO_NPY_PATH.joinpath("node_cache_matrix.npy"))
+    costs = np.load(INFO_NPY_PATH.joinpath("costs.npy"))
     node_costs = np.load(INFO_NPY_PATH.joinpath("node_costs.npy"))
-    return max_values, max_bandwidth, mapping, cost, node_costs
+    return max_values, max_bandwidths, mappings, costs, node_costs
 
 
 def sample_files(
@@ -65,11 +69,6 @@ def train_droo_net_pulp_pipline(
     timepoint: int,
     droo_input_path: Path,
     MemoryDNN_Net: plMemoryDNN,
-    max_values: np.ndarray,
-    max_bandwidth: np.ndarray,
-    mappings: np.ndarray,
-    cost: np.ndarray,
-    node_costs: np.ndarray,
 ) -> tuple[int, np.ndarray | None]:
     """Main pipeline for training the DROO network using the simplex method."""
     droo_data: Mapping[Any, Any] = sio.loadmat(
@@ -86,20 +85,14 @@ def train_droo_net_pulp_pipline(
     # droo_connect用于保存奖励函数的差值
     droo_connect: np.ndarray = droo_output - timepoint_data[:, np.newaxis, :] + 1
     solutions: np.ndarray = compute_solutions(
-        R,
-        droo_output,
-        droo_connect,
-        max_values,
-        max_bandwidth,
-        mappings,
-        cost,
+        R=R, I_ij=droo_output, A_ij=droo_connect, ShareMemManager=SharedMemManager
     )
     if solutions.size == 0:
         return 0, None
     # 获得最优方案
     best_index: int
     best_solution: np.ndarray
-    best_index, _, best_solution = get_best_solution(solutions, mappings, node_costs)
+    best_index, _, best_solution = get_best_solution(solutions, SharedMemManager)
     # 每5个时间点训练一次神经网络
     MemoryDNN_Net.encode(timepoint_data, droo_output[:, best_index, :])
     return solutions.shape[0], best_solution
@@ -126,7 +119,18 @@ if __name__ == "__main__":
     setup_directories()
 
     # 加载预处理数据
-    max_values, max_bandwidth, mappings, cost, node_costs = load_preprocessed_data()
+    max_values, max_bandwidths, mappings, costs, node_costs = load_preprocessed_data()
+
+    logger.info("Creating shared memory blocks...")
+    # 创建共享内存块
+    for name, array in {
+        "max_values": max_values,
+        "max_bandwidths": max_bandwidths,
+        "mappings": mappings,
+        "costs": costs,
+        "node_costs": node_costs,
+    }.items():
+        SharedMemManager.create_block(name, array)
 
     # 训练 DROO 网络
     logger.info("Start training DRLOP network...")
@@ -188,11 +192,6 @@ if __name__ == "__main__":
                     timepoint=timepoint,
                     droo_input_path=droo_input_path,
                     MemoryDNN_Net=MemoryDNN_Net,
-                    max_values=max_values,
-                    max_bandwidth=max_bandwidth,
-                    mappings=mappings,
-                    cost=cost,
-                    node_costs=node_costs,
                 )
 
                 if solutions_nums == 0:
@@ -210,3 +209,6 @@ if __name__ == "__main__":
     # 最终保存
     MemoryDNN_Net.save_model(MODEL_SAVE_PATH / "best")
     logger.info("Training Done!")
+    # 清理共享内存
+    SharedMemManager.cleanup()
+    logger.info("Shared memory cleaned up.")
