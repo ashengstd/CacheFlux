@@ -113,9 +113,7 @@ def infer_csv_pipeline(
     for row in df.itertuples(index=False):
         user_list.append(UserReq.from_row(row=row))
     # 过滤掉带宽数据为0的用户
-    user_list = [
-        user for user in user_list if user.reqs > 0 and user.get_connectivity().size > 0
-    ]
+    user_list = [user for user in user_list if user.reqs > 0]
     UserReqs, connectivity_matrix = UserReq.getRequestsAndConnectivity(user_list)
     if UserReqs.shape[0] == 0:
         logger.error("No valid user request found")

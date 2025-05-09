@@ -55,11 +55,7 @@ def preparing_for_droo(
         user_list = [
             UserReq.from_row(row=row) for row in timepoint_user_bandwidths.itertuples()
         ]
-        user_list = [
-            user
-            for user in user_list
-            if user.reqs > 0 and user.get_connectivity().size > 0
-        ]
+        user_list = [user for user in user_list if user.reqs > 0]
         timepoint_user_bandwidth, time_connectivity_matrix = (
             UserReq.getRequestsAndConnectivity(
                 user_list=user_list,
