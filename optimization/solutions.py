@@ -3,7 +3,7 @@ from multiprocessing import Pool
 
 import numpy as np
 
-from optimization.optimization_slack import lp
+from optimization.problom import lp
 from optimization.SharedMemory import SharedMemManager
 from utils.func import handle_error
 from utils.logger import logger
