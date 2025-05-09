@@ -16,24 +16,13 @@ model_ckpt = "ckpts"
 # Paths to the logs
 log_dir = "logs"
 
-[logs]
-pulp_log_enable = false
-memory_dnn_log_enable = true
-
-[special]
-month_suffix_cleaned = "_csv_cleaned"
-
 [params]
 network_architecture = [116, 120, 80, 116]
 learning_rate = 0.007
-training_interval = 4
+training_interval = 2
 batch_size = 128
 memory_size = 1024
 beta1 = 0.09
 beta2 = 0.999
 weight_decay = 0.0001
 max_users = 2000
-
-
-[general]
-threads = 2

@@ -10,8 +10,6 @@ from pulp import (
 )
 
 from optimization.SharedMemory import SharedMemManager
-from utils.config import LP_LOG_PATH, PULP_LOG_ENABLE, THREADS
-from utils.logger import logger
 
 PUNISHMENT = 1e3
 
@@ -92,7 +90,6 @@ def max_constraint_with_slack(
     max_values: np.ndarray,
     mapping: np.ndarray,
     users: int,
-    caches: int,
 ) -> tuple[list[LpAffineExpression], list[LpAffineExpression]]:
     constraints = []
     slack_vars = []  # 存储松弛变量
@@ -118,20 +115,26 @@ def max_constraint_with_slack(
     return constraints, slack_vars
 
 
-def solve_optimization(idx) -> tuple[np.ndarray, int]:
+def lp(idx) -> tuple[np.ndarray, int]:
     """
     求解优化问题并返回结果, Shape为 USERS*CACHES
     """
 
-    logger.debug(f"Processing solution for index {idx}")
+    I_ij = SharedMemManager.get_by_name("I_ij")
+    A_ij = SharedMemManager.get_by_name("A_ij")
+    R_i = SharedMemManager.get_by_name("R")
+    max_values = SharedMemManager.get_by_name("max_values")
+    max_bandwidths = SharedMemManager.get_by_name("max_bandwidths")
+    mappings = SharedMemManager.get_by_name("mappings")
+    costs = SharedMemManager.get_by_name("costs")
 
-    I_ij, _ = SharedMemManager.get("I_ij")
-    A_ij, _ = SharedMemManager.get("A_ij")
-    R_i, _ = SharedMemManager.get("R")
-    max_values, _ = SharedMemManager.get("max_values")
-    max_bandwidths, _ = SharedMemManager.get("max_bandwidths")
-    mappings, _ = SharedMemManager.get("mappings")
-    costs, _ = SharedMemManager.get("costs")
+    assert isinstance(I_ij, np.ndarray)
+    assert isinstance(A_ij, np.ndarray)
+    assert isinstance(R_i, np.ndarray)
+    assert isinstance(max_values, np.ndarray)
+    assert isinstance(max_bandwidths, np.ndarray)
+    assert isinstance(mappings, np.ndarray)
+    assert isinstance(costs, np.ndarray)
 
     I_ij = I_ij[:, idx, :]
     A_ij = A_ij[:, idx, :]
@@ -149,7 +152,7 @@ def solve_optimization(idx) -> tuple[np.ndarray, int]:
     # for constraint in constraints_min:
     #     prob += constraint
     constraints_max, slack_vars_max = max_constraint_with_slack(
-        B, I_ij, max_values, mappings, users, caches
+        B, I_ij, max_values, mappings, users
     )
     for constraint in constraints_max:
         prob += constraint
@@ -159,13 +162,7 @@ def solve_optimization(idx) -> tuple[np.ndarray, int]:
     prob += objective_function(B, A_ij, costs, users, caches, slack_vars)
 
     # 求解
-    prob.solve(PULP_CBC_CMD(msg=0, threads=THREADS))
-
-    # 记录求解状态
-    if PULP_LOG_ENABLE:
-        with open(LP_LOG_PATH, "a") as log_file:
-            status = "Optimal" if prob.status == 1 else "Infeasible"
-            log_file.write(f"Status: {status}\n")
+    prob.solve(PULP_CBC_CMD(msg=0))
 
     return np.array(
         [

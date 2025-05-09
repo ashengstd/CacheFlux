@@ -1,10 +1,10 @@
 import json
+import os
 import random
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import List, Tuple, Union
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
@@ -84,7 +84,7 @@ class plMemoryDNN(pl.LightningModule):
         self._build_network()
 
         # Initialize memory buffer
-        self.register_buffer("memory_counter", torch.tensor(0))
+        self.memory_counter: np.int8 = torch.tensor(0, dtype=torch.int8)
         self.memory: MemoryBuffer = MemoryBuffer(
             max_size=self.config.memory_size,
         )
@@ -164,7 +164,10 @@ class plMemoryDNN(pl.LightningModule):
 
         dataset = MemoryDataset(states, actions)
         dataloader = DataLoader(
-            dataset, batch_size=self.config.batch_size, shuffle=True
+            dataset,
+            batch_size=self.config.batch_size,
+            shuffle=True,
+            num_workers=(os.cpu_count() - 1),
         )
 
         trainer = pl.Trainer(
@@ -236,28 +239,6 @@ class plMemoryDNN(pl.LightningModule):
                 strategies.append(mask.float())
 
         return torch.stack(strategies, dim=1)
-
-    def plot_training_history(self):
-        """Plot training loss history"""
-        if not self.trainer.callback_metrics:
-            logger.error("No training history available")
-            return
-
-        losses = [x["train_loss"].item() for x in self.trainer.callback_metrics]
-        plt.figure(figsize=(10, 6))
-        plt.plot(
-            range(
-                0,
-                len(losses) * self.config.training_interval,
-                self.config.training_interval,
-            ),
-            losses,
-        )
-        plt.xlabel("Training Steps")
-        plt.ylabel("Loss")
-        plt.title("Training Loss History")
-        plt.grid(True)
-        plt.show()
 
     def save_model(self, save_path: Path):
         """Save model weights and config using pathlib"""

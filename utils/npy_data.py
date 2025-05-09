@@ -30,11 +30,9 @@ for _, row in df_cache_info.iterrows():
 
 # 保存 node_cache_matrix 和映射关系
 np.save(INFO_NPY_PATH.joinpath("node_cache_matrix.npy"), node_cache_matrix)
-with open(INFO_NPY_PATH.joinpath("pre_data.json"), "w") as f:
-    json.dump(
-        {"node2id": node2id, "cache2id": cache2id, "cache2node": cache_to_node_ids}, f
-    )
-logger.info("pre_data.json and node_cache_matrix.npy saved")
+with open(INFO_NPY_PATH.joinpath("cache2id.json"), "w") as f:
+    json.dump(cache2id, f, indent=4)
+logger.info("cache2id.json and node_cache_matrix.npy saved")
 
 # 构建并保存 B_jk_max 矩阵
 B_jk_max = (

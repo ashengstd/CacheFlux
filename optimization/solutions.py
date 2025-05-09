@@ -1,21 +1,23 @@
+import os
 from multiprocessing import Pool
 
 import numpy as np
 
-from optimization.optimization_slack import solve_optimization
+from optimization.optimization_slack import lp
 from optimization.SharedMemory import SharedMemManager
+from utils.func import handle_error
 from utils.logger import logger
 
 
 def process_solution_shm(idx):
-    logger.debug(f"Processing solution {idx}...")
-
-    B, status = solve_optimization(idx=idx)
+    logger.debug(f"Processing solution {idx + 1}...")
+    SharedMemManager.load_metadata()
+    B, status = lp(idx=idx)
 
     return idx, B, status
 
 
-def compute_solutions_shm(
+def compute_solutions(
     R: np.ndarray,
     I_ij: np.ndarray,
     A_ij: np.ndarray,
@@ -48,16 +50,15 @@ def compute_solutions_shm(
         if status == 1:
             solutions.append(B)
 
-    def handle_error(e):
-        logger.error(f"Error in child process: {e}")
+    SharedMemManager.export_metadata()
 
     # 进行并行计算
-    with Pool() as pool:
-        args = [i for i in range(nums)]
-        for arg in args:
+    with Pool(processes=(os.cpu_count() - 1)) as pool:
+        idxs = [i for i in range(nums)]
+        for idx in idxs:
             pool.apply_async(
                 process_solution_shm,
-                args=(arg,),
+                args=(idx,),
                 callback=update_solutions,
                 error_callback=handle_error,
             )
@@ -86,8 +87,8 @@ def get_best_solution(
         f"Search for the best solution... Number of solutions: {solutions.shape[0]}"
     )
 
-    mappings, _ = SharedMemManager.get("mappings")
-    node_costs, _ = SharedMemManager.get("node_costs")
+    mappings = SharedMemManager.get_by_name("mappings")
+    node_costs = SharedMemManager.get_by_name("node_costs")
     for i in range(solutions.shape[0]):
         # 循环所有分配方案
         B = solutions[i, :, :]
@@ -95,6 +96,7 @@ def get_best_solution(
             continue
 
         # 计算节点的流量
+        assert isinstance(mappings, np.ndarray)
         node_flows = np.sum(B @ mappings.T, axis=0)
 
         # 扔掉流量最大的三个节点

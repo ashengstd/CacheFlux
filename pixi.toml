@@ -36,6 +36,7 @@ rich="*"
 mypy="*"
 pytorch-lightning ="*"
 python = ">=3.11"
+fire = "*"
 
 [pypi-dependencies]
 matplotlib-stubs="*"

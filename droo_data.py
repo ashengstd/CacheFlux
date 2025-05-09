@@ -1,83 +1,73 @@
-import json
-from multiprocessing import Pool
 from pathlib import Path
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
 from scipy.io import savemat
 
 from models import UserReq
+from optimization.SharedMemory import SharedMemManager
 from utils.config import (
-    INFO_CSV_PATH,
-    INFO_NPY_PATH,
     INPUT_DATA_PATH,
     REQ_CSV_CSV_PATH,
 )
+from utils.func import loadInfoData
 from utils.logger import logger
 
 
-def process_timepoint(args):
-    (
-        timepoint,
-        user_bandwidth,
-        caches,
-        coverage_cache_group_info,
-        cache_group_info,
-        node_info,
-        coverage_info,
-        quality_level_info,
-        cache2id,
-    ) = args
-    time_user_bandwidth = user_bandwidth[user_bandwidth["时间点"] == timepoint]
-    users = time_user_bandwidth.shape[0]
+def process_timepoint(
+    time_user_bandwidths: pd.DataFrame,
+) -> Tuple[int, np.ndarray, np.ndarray]:
+    """Process a single timepoint of user bandwidth data."""
+    cache2id = SharedMemManager.get_by_name("cache2id")
+    assert isinstance(cache2id, dict), "cache2id should be a dictionary"
+    timepoint = time_user_bandwidths["时间点"].values[0]
+    caches = len(cache2id)
+    if time_user_bandwidths.shape[0] == 0:
+        return timepoint, np.zeros((0, caches), dtype=bool), np.zeros(0, dtype=int)
+    users = time_user_bandwidths.shape[0]
     time_connectivity_matrix = np.zeros((users, caches), dtype=bool)
-    # 记录有效用户的索引
-    vaild_users = []
     UserReqs = np.zeros(users, dtype=int)
 
-    for i, row in enumerate(time_user_bandwidth.itertuples(index=False)):
-        req, connectivity = UserReq(
-            province=row.省份,
-            operator=row.运营商,
-            coverage_name=row.覆盖名,
-            ip_type=row.IP类型,
-            reqs=row.带宽数据,
-        ).get_connectivity(
-            coverage_cache_group_info,
-            cache_group_info,
-            node_info,
-            coverage_info,
-            quality_level_info,
-            cache2id,
-            caches,
-        )
-        if req == 0:
+    for i, row in enumerate(time_user_bandwidths.itertuples(index=False)):
+        connectivity = UserReq.from_row(row=row).get_connectivity()
+        if connectivity.size == 0:
+            logger.debug(f"User {i} has no connectivity")
             continue
         time_connectivity_matrix[i, :] = connectivity
-        UserReqs[i] = req
-        vaild_users.append(i)
-    time_connectivity_matrix = time_connectivity_matrix[vaild_users, :]
-    vaild_timepoint_user_bandwidth = UserReqs[vaild_users]
-    return timepoint, time_connectivity_matrix, vaild_timepoint_user_bandwidth
+        UserReqs[i] = row.带宽数据
+    time_connectivity_matrix = time_connectivity_matrix
+    print(time_connectivity_matrix.any(), time_connectivity_matrix.sum())
+    return timepoint, time_connectivity_matrix, UserReqs
 
 
 def preparing_for_droo(
     user_bandwidth: pd.DataFrame,
     save_path: Path,
-    caches: int,
-    coverage_cache_group_info: pd.DataFrame,
-    cache_group_info: pd.DataFrame,
-    node_info: pd.DataFrame,
-    coverage_info: pd.DataFrame,
-    quality_level_info: pd.DataFrame,
-    cache2id: dict,
 ) -> None:
     timepoints = user_bandwidth["时间点"].nunique()
     logger.info(f"All timepoints needed to process: {timepoints}")
 
-    def update_timepoint(result):
-        timepoint, time_connectivity_matrix, timepoint_user_bandwidth = result
+    for timepoint in range(timepoints):
+        timepoint_user_bandwidths = user_bandwidth[
+            user_bandwidth["时间点"] == timepoint
+        ]
+        user_list = [
+            UserReq.from_row(row=row) for row in timepoint_user_bandwidths.itertuples()
+        ]
+        user_list = [
+            user
+            for user in user_list
+            if user.reqs > 0 and user.get_connectivity().size > 0
+        ]
+        timepoint_user_bandwidth, time_connectivity_matrix = (
+            UserReq.getRequestsAndConnectivity(
+                user_list=user_list,
+            )
+        )
+
         if time_connectivity_matrix.shape[0] != 0:
+            logger.info(f"Timepoint {timepoint + 1} processed successfully, ")
             savemat(
                 save_path.joinpath(f"{timepoint + 1}.mat"),
                 {
@@ -87,44 +77,13 @@ def preparing_for_droo(
                 do_compression=True,
             )
 
-    with Pool() as pool:
-        args = [
-            (
-                timepoint,
-                user_bandwidth,
-                caches,
-                coverage_cache_group_info,
-                cache_group_info,
-                node_info,
-                coverage_info,
-                quality_level_info,
-                cache2id,
-            )
-            for timepoint in range(timepoints)
-        ]
-        for arg in args:
-            pool.apply_async(process_timepoint, args=(arg,), callback=update_timepoint)
-        pool.close()
-        pool.join()
+    logger.info("All timepoints processed successfully.")
 
 
 if __name__ == "__main__":
-    # 加载必要的 JSON 和 CSV 数据
-    with open(INFO_NPY_PATH.joinpath("pre_data.json"), encoding="UTF-8") as f:
-        cache2id = json.load(f)["cache2id"]
-    caches = len(cache2id)  # 计算 cache 组数量
-
-    # 加载 CSV 数据表格
-    coverage_cache_group_info = pd.read_csv(
-        f"{INFO_CSV_PATH}/coverage_cache_group_info.csv"
-    )
-    cache_group_info = pd.read_csv(f"{INFO_CSV_PATH}/cache_group_info.csv")
-    node_info = pd.read_csv(f"{INFO_CSV_PATH}/node_info.csv")
-    coverage_info = pd.read_csv(f"{INFO_CSV_PATH}/coverage_info.csv")
-    quality_level_info = pd.read_csv(f"{INFO_CSV_PATH}/quality_level_info.csv")
-
+    loadInfoData()
     # 获取月份文件数量（预处理数据文件夹中的文件数量）
-    months = sum(1 for file in Path(REQ_CSV_CSV_PATH).iterdir())
+    months = sum(1 for _ in Path(REQ_CSV_CSV_PATH).iterdir())
 
     # 处理每个月的文件夹
     for month_dir in sorted(list(REQ_CSV_CSV_PATH.iterdir())):
@@ -156,11 +115,4 @@ if __name__ == "__main__":
             preparing_for_droo(
                 user_bandwidth,
                 daily_dir,
-                caches,
-                coverage_cache_group_info,
-                cache_group_info,
-                node_info,
-                coverage_info,
-                quality_level_info,
-                cache2id,
             )

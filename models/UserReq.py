@@ -1,5 +1,11 @@
+from typing import Dict, List, Tuple
+
 import numpy as np
 import pandas as pd
+
+from optimization.SharedMemory import SharedMemManager
+from utils.config import CACHES
+from utils.logger import logger
 
 
 class UserReq:
@@ -85,27 +91,57 @@ class UserReq:
 
     def get_connectivity(
         self,
-        coverage_cache_group_info: pd.DataFrame,
-        cache_group_info: pd.DataFrame,
-        node_info: pd.DataFrame,
-        coverage_info: pd.DataFrame,
-        quality_level_info: pd.DataFrame,
-        cache2id: dict[str, int],
-        caches: int,
-    ) -> tuple[int, np.ndarray | None]:
+    ) -> np.ndarray:
         """计算用户请求的连接性向量"""
         if self.reqs == 0:
-            return 0, None
+            return np.array([])
+
+        coverage_cache_group_info: pd.DataFrame = SharedMemManager.get_by_name(
+            "coverage_cache_group_info"
+        )
+        cache_group_info: pd.DataFrame = SharedMemManager.get_by_name(
+            "cache_group_info"
+        )
+        node_info: pd.DataFrame = SharedMemManager.get_by_name("node_info")
+        coverage_info: pd.DataFrame = SharedMemManager.get_by_name("coverage_info")
+        quality_level_info: pd.DataFrame = SharedMemManager.get_by_name(
+            "quality_level_info"
+        )
+        cache2id: Dict = SharedMemManager.get_by_name("cache2id")
+
+        # assert type
+        assert isinstance(coverage_cache_group_info, pd.DataFrame), (
+            f"coverage_cache_group_info should be a DataFrame, but got {type(coverage_cache_group_info)}"
+        )
+        assert isinstance(cache_group_info, pd.DataFrame), (
+            f"cache_group_info should be a DataFrame, but got {type(cache_group_info)}"
+        )
+        assert isinstance(node_info, pd.DataFrame), (
+            f"node_info should be a DataFrame, but got {type(node_info)}"
+        )
+        assert isinstance(coverage_info, pd.DataFrame), (
+            f"coverage_info should be a DataFrame, but got {type(coverage_info)}"
+        )
+        assert isinstance(quality_level_info, pd.DataFrame), (
+            f"quality_level_info should be a DataFrame, but got {type(quality_level_info)}"
+        )
+        assert isinstance(cache2id, dict), (
+            f"cache2id should be a dictionary, but got {type(cache2id)}"
+        )
+
+        caches: int = len(cache2id)
 
         # 获取 cache group 和 node 信息
-        cache_group = UserReq.get_cache_group(
+        cache_group: pd.DataFrame = UserReq.get_cache_group(
             self.operator, self.coverage_name, self.ip_type, coverage_cache_group_info
         )
-        node_name = UserReq.get_node_name(cache_group, cache_group_info)
-        connect_node_info = UserReq.get_node_info(node_name, node_info)
+        node_name: pd.DataFrame = UserReq.get_node_name(cache_group, cache_group_info)
+        connect_node_info: pd.DataFrame = UserReq.get_node_info(node_name, node_info)
 
         # 过滤节点信息
-        quality_level = UserReq.get_quality_level(self.coverage_name, coverage_info)
+        quality_level: int = UserReq.get_quality_level(
+            self.coverage_name, coverage_info
+        )
         connect_node_info = UserReq.filter_quality_level(
             connect_node_info,
             quality_level,
@@ -115,12 +151,47 @@ class UserReq:
         )
 
         # 计算连接性向量
-        connectivity_vector = np.zeros(caches, dtype=bool)
-        cache_indices = (
+        connectivity_vector: np.ndarray = np.zeros(caches, dtype=bool)
+
+        cache_indices: pd.Series = (
             connect_node_info["cache组"].map(cache2id).dropna().astype(int) - 1
         )
         connectivity_vector[cache_indices] = True
 
-        return (
-            (self.reqs, connectivity_vector) if connectivity_vector.any() else (0, None)
+        return connectivity_vector if connectivity_vector.any() else np.array([])
+
+    @staticmethod
+    def from_row(row) -> "UserReq":
+        return UserReq(
+            province=str(row.省份),
+            operator=str(row.运营商),
+            coverage_name=str(row.覆盖名),
+            ip_type=int(float(row.IP类型))
+            if isinstance(row.IP类型, (str, float))
+            else int(str(row.IP类型)),
+            reqs=int(row.带宽数据)
+            if isinstance(row.带宽数据, (str, float, int))
+            else 0,
         )
+
+    @staticmethod
+    def getRequestsAndConnectivity(
+        user_list: List["UserReq"],
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Get user requests and connectivity matrix."""
+
+        users = len(user_list)
+        connectivity_matrix = np.zeros((users, CACHES), dtype=bool)
+        UserReqs = np.zeros(users, dtype=int)
+        logger.info("Start processing user requests and connectivity matrix...")
+
+        for i, user in enumerate(user_list):
+            if user.reqs > 0:
+                connectivity = user.get_connectivity()
+                if connectivity.size == 0:
+                    logger.debug(f"User {i} has no connectivity")
+                    continue
+                UserReqs[i] = user.reqs
+                connectivity_matrix[i, :] = connectivity
+
+        return UserReqs, connectivity_matrix

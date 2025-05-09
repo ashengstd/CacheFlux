@@ -30,7 +30,7 @@ class RichLogger(Logger):
 
 # 设置 rich 日志处理器
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(message)s",
     datefmt="[%X]",
     handlers=[RichHandler()],
